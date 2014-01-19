@@ -92,9 +92,9 @@ public class MaBot implements TradeBot {
     private final static long SMA_CYCLES = 7L; // 124 184 my wife is witch
     private final static long LONG_SMA_CYCLES = 30L;
     private final static long SMA_INTERVAL = SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    //private final static String EMA_INTERVAL = "420s";
+    private final static String EMA_INTERVAL = "14m";
     private final static long LONG_SMA_INTERVAL = LONG_SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    //private final static String LONG_EMA_INTERVAL = "1800s";
+    private final static String LONG_EMA_INTERVAL = "60m";
 
     // Instance variables
 
@@ -257,8 +257,9 @@ public class MaBot implements TradeBot {
 
         final Logger logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
+        de.andreas_rueckert.util.TimeUtils.microsFromString("7m");
         logger.info("MABot started");
-        
+       
         // Create a ticker thread.
         _updateThread = new Thread() 
         {
@@ -284,8 +285,11 @@ public class MaBot implements TradeBot {
                 try
                 {
                     analyzer = ChartAnalyzer.getInstance(); 
-                    sma = analyzer.getSMA(_tradeSite, _tradedCurrencyPair, SMA_INTERVAL);
-                    longSma = analyzer.getSMA(_tradeSite, _tradedCurrencyPair, LONG_SMA_INTERVAL);
+                    System.out.println("1");
+                    sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
+                    System.out.println("2");
+                    longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
+                    System.out.println("3");
                 }
                 catch (Exception e)
                 {
@@ -328,8 +332,8 @@ public class MaBot implements TradeBot {
                             }
                         }*/
 
-                        sma = analyzer.getSMA(_tradeSite, _tradedCurrencyPair, SMA_INTERVAL);
-                        longSma = analyzer.getSMA(_tradeSite, _tradedCurrencyPair, LONG_SMA_INTERVAL);
+                        sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
+                        longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
   	    	            depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
                         longSmaToBuy = longSma.multiply(buyFactor);
                         longSmaToSell = longSma.multiply(sellFactor);
