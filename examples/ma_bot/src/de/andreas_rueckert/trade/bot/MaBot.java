@@ -89,12 +89,17 @@ public class MaBot implements TradeBot {
      */
     private final static int UPDATE_INTERVAL = 60;  // 60 seconds for now...
     
-    private final static long SMA_CYCLES = 7L; // 124 184 my wife is witch
+    /*private final static long SMA_CYCLES = 7L; // 124 184 my wife is witch
     private final static long LONG_SMA_CYCLES = 30L;
     private final static long SMA_INTERVAL = SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    private final static String EMA_INTERVAL = "14m";
     private final static long LONG_SMA_INTERVAL = LONG_SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    private final static String LONG_EMA_INTERVAL = "60m";
+    */
+
+    private final static String EMA_SHORT_INTERVAL = "7m";
+    private final static String EMA_LONG_INTERVAL = "30m";
+    private final static String MACD_SHORT_INTERVAL = "12m";
+    private final static String MACD_LONG_INTERVAL = "26m";
+    private final static String MACD_SMA_INTERVAL = "9m";
 
     // Instance variables
 
@@ -126,6 +131,8 @@ public class MaBot implements TradeBot {
 
     private CryptoCoinOrderBook orderBook;
 
+    private Price lastPrice = null;
+    
     // Constructors
 
     /**
@@ -264,14 +271,20 @@ public class MaBot implements TradeBot {
         _updateThread = new Thread() 
         {
 
-            Price sma = null;
-            Price longSma = null;
-            boolean shortSmaAbove;
+            Price shortEma = null;
+            Price longEma = null;
+            Price macd = null;
+            Price lastMacd = null;
+            Price deltaMacd = null;
+            Price buyPrice = null;
+            Price sellPrice = null;
+            boolean shortEmaAbove;
+            boolean buyProfitable = true;
+            boolean sellProfitable = true;
             Order order;
             Order lastDeal;
-            BigDecimal longSmaToBuy;
-            BigDecimal longSmaToSell;
-            Depth depth;
+            //BigDecimal longSmaToBuy;
+            //BigDecimal longSmaToSell;
 
             /**
             * The main bot thread.
@@ -285,11 +298,9 @@ public class MaBot implements TradeBot {
                 try
                 {
                     analyzer = ChartAnalyzer.getInstance(); 
-                    System.out.println("1");
-                    sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
-                    System.out.println("2");
-                    longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
-                    System.out.println("3");
+                    shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                    longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                    macd = shortEma.subtract(longEma);
                 }
                 catch (Exception e)
                 {
@@ -297,17 +308,16 @@ public class MaBot implements TradeBot {
                     System.exit(-1);
                 }
 
-                longSmaToBuy = longSma.multiply(buyFactor);
-                longSmaToSell = longSma.multiply(sellFactor);
-                shortSmaAbove = sma.compareTo(longSmaToBuy) > 0;
+                shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
 
                 while( _updateThread == this) 
                 {  // While the bot thread is not stopped...
                    
                     long t1 = System.currentTimeMillis();
-                    boolean toBuy = false;
-                    boolean toSell = false;
+                    lastMacd = macd;
+                    //boolean toBuy = false;
+                    //boolean toSell = false;
 
                     try
                     {
@@ -332,36 +342,39 @@ public class MaBot implements TradeBot {
                             }
                         }*/
 
-                        sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
-                        longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
-  	    	            depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
-                        longSmaToBuy = longSma.multiply(buyFactor);
-                        longSmaToSell = longSma.multiply(sellFactor);
-                        boolean downsideUp = !shortSmaAbove && sma.compareTo(longSmaToBuy) > 0;
-                        boolean upsideDown = shortSmaAbove && sma.compareTo(longSmaToSell) < 0;
-
-                        System.out.println("buy (sma > longSmaToBuy) :  " + (sma.compareTo(longSmaToBuy) > 0));
-                        System.out.println("sell (sma < longSmaToSell): " + (sma.compareTo(longSmaToSell) < 0));
+                        shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                        longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                        macd = shortEma.subtract(longEma);
+                        deltaMacd = macd.subtract(lastMacd);
+  	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
+                        buyPrice = depth.getBuy(0).getPrice();
+                        sellPrice = depth.getSell(0).getPrice();
+                        
+                        if (lastPrice != null)
+                        {
+                            buyProfitable = sellPrice.multiply(buyFactor).compareTo(lastPrice.multiply(sellFactor)) < 0;
+                            sellProfitable = buyPrice.multiply(sellFactor).compareTo(lastPrice.multiply(buyFactor)) > 0;
+                        }
+                        boolean downsideUp = !shortEmaAbove && shortEma.compareTo(longEma) > 0;
+                        boolean upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
+                        boolean macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
+                        boolean macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
+                        //System.out.println("buy (shortEma > longEma) :  " + (shortEma.compareTo(longEma) > 0));
+                        //System.out.println("sell (shortEma < longEma): " + (shortEma.compareTo(longEma) < 0));
 
                         order = null;
-                        if (toBuy || downsideUp) 
+                        if (buyProfitable && (macdDownsideUp || (downsideUp && deltaMacd.signum() > 0))) 
                         {
-                            shortSmaAbove = true;
-                            toBuy = false;
+                            shortEmaAbove = true;
+                            //toBuy = false;
  			                order = buyCurrency(depth);
                         }
-                        else if (toSell || upsideDown) 
+                        else if (sellProfitable && (macdUpsideDown || (upsideDown && deltaMacd.signum() < 0))) 
                         {
-                            shortSmaAbove = false;
-                            toSell = false;
+                            shortEmaAbove = false;
+                            //toSell = false;
  			                order = sellCurrency(depth); 
                         }
-                        /*if (order != null)
-                        {
-                            OrderStatus status = orderBook.checkOrder(order.get());
-                            System.out.println(order);
-                            System.out.println(status);
-                        }*/
                         reportCycleSummary();
                         
                     }
@@ -378,31 +391,38 @@ public class MaBot implements TradeBot {
 
             private void reportCycleSummary()
             {
-                logger.info(String.format("trend     | [ %s ] ", shortSmaAbove ? "+" : "-"));
+                logger.info(String.format("trend             |                                   [ %s ]       |", shortEmaAbove ? "+" : "-"));
                 if (order != null)
                 {
-                    logger.info(String.format("current   | %s", order));
-                    logger.info(String.format(" \\-status | %s", order.getStatus()));
+                    logger.info(String.format("current deal      | %s", order));
+                    logger.info(String.format(" \\-status         | %s", order.getStatus()));
                     lastDeal = order;
                 }
                 else
                 {
-                    logger.info("current   |");
+                    logger.info("current deal      |");
                 }
                 if (lastDeal != null)
                 {
-                    logger.info(String.format("last deal | %s", lastDeal));
-                    logger.info(String.format(" \\-status | %s", lastDeal.getStatus()));
+                    logger.info(String.format("last deal         | %s", lastDeal));
+                    logger.info(String.format(" \\-status         | %s", lastDeal.getStatus()));
                 }
                 else
                 {
-                    logger.info("last deal |");
+                    logger.info("last deal         |");
                 }
-                logger.info(String.format("sma%3d    | %12f  = %12f = %12f", SMA_CYCLES, sma, sma, sma));
-                logger.info(String.format("sma%3d    | %12f* < %12f < %12f*", LONG_SMA_CYCLES, longSmaToSell, longSma, longSmaToBuy));
-                logger.info(String.format("buy       |                 %12f         ^       |", depth.getBuy(0).getPrice()));
-                logger.info(String.format("sell      |       ^         %12f                 |", depth.getSell(0).getPrice()));
-                logger.info(              "----------+---------------------------------------------+");
+                String priceTrend = macd.signum() > 0 ? "+" : "-";
+                String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
+                String buyProfitableFlag = buyProfitable ? "*" : " ";
+                String sellProfitableFlag = sellProfitable ? "*" : " ";
+                logger.info(String.format("buy               |                 %12f      [ %s ]       |", buyPrice, sellProfitableFlag));
+                logger.info(String.format("sell              |                 %12f      [ %s ]       |", sellPrice, buyProfitableFlag));
+                logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_SHORT_INTERVAL, shortEma));
+                logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_LONG_INTERVAL, longEma));
+                logger.info(String.format("macd              |                 %12f      [ %s ]       |", macd, priceTrend));
+                logger.info(String.format(" +-prev           |                 %12f                  |", lastMacd));
+                logger.info(String.format(" +-delta          |                 %12f      [ %s ]       |", deltaMacd, macdTrend));
+                logger.info(              "------------------+-----------------------------------------------+");
             }
 
             private void sleepUntilNextCycle(long t1)
@@ -449,6 +469,7 @@ public class MaBot implements TradeBot {
 				// Create a buy order...
 			    String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                         _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
+                lastPrice = sellPrice;
 		        return orderBook.getOrder(orderId);
             }
         }        
@@ -478,6 +499,7 @@ public class MaBot implements TradeBot {
                 Price buyPrice = depthOrder.getPrice();
 		        String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                        _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
+                lastPrice = buyPrice;
                 return orderBook.getOrder(orderId);
             }
 		}
