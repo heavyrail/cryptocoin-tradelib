@@ -72,12 +72,12 @@ public class MaBot implements TradeBot {
     /**
      * The minimal profit in percent for a trade, compared to the SMA.
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal( "0.2");
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00099653261"); // magic :)))))
 
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount( "0.01");
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.01");
 
     /**
      * The interval for the SMA value.
@@ -264,7 +264,6 @@ public class MaBot implements TradeBot {
 
         final Logger logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
-        de.andreas_rueckert.util.TimeUtils.microsFromString("7m");
         logger.info("MABot started");
        
         // Create a ticker thread.
@@ -292,8 +291,22 @@ public class MaBot implements TradeBot {
             @Override public void run() 
             {
                 ChartAnalyzer analyzer = null;
-                BigDecimal sellFactor = (new BigDecimal("100")).subtract(MIN_PROFIT).divide((new BigDecimal( "100")), MathContext.DECIMAL128);
-		        BigDecimal buyFactor = (new BigDecimal("100")).add(MIN_PROFIT).divide((new BigDecimal( "100")), MathContext.DECIMAL128);
+                BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                System.out.println("FEE = " + fee);
+
+                // sell factor =                  (1 + MIN_PROFIT) / (1 - fee)^2 = (1 + MIN_PROFIT) / (1 - 2*fee + fee^2);
+                //  buy factor = 1 / sellFactor = (1 - fee)^2 / (1 + MIN_PROFIT) = (1 - 2*fee + fee^2) / (1 + MIN_PROFIT);
+                BigDecimal numberOne = new BigDecimal("1"); 
+                BigDecimal doubleFee = fee.add(fee);
+                BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
+                BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
+                BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
+                BigDecimal sellFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
+		        BigDecimal buyFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                
+                logger.info("fee = " + fee);
+                logger.info("bf  = " + sellFactor);
+                logger.info("sf  = " + buyFactor);
 
                 try
                 {
