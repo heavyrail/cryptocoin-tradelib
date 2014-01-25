@@ -282,18 +282,68 @@ public class MaBot implements TradeBot {
             boolean sellProfitable = true;
             Order order;
             Order lastDeal;
-            //BigDecimal longSmaToBuy;
-            //BigDecimal longSmaToSell;
+            ChartAnalyzer analyzer = null;
+            BigDecimal sellFactor;
+            BigDecimal buyFactor;
 
             /**
             * The main bot thread.
             */
             @Override public void run() 
             {
-                ChartAnalyzer analyzer = null;
-                BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
-                System.out.println("FEE = " + fee);
+                initTrade();
+                while( _updateThread == this) 
+                { 
+                    long t1 = System.currentTimeMillis();
+                    lastMacd = macd;
+                    try
+                    {
+                        shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                        longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                        macd = shortEma.subtract(longEma);
+                        deltaMacd = macd.subtract(lastMacd);
+  	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
+                        buyPrice = depth.getBuy(0).getPrice();
+                        sellPrice = depth.getSell(0).getPrice();
+                        
+                        if (lastPrice != null)
+                        {
+                            buyProfitable = sellPrice.multiply(buyFactor).compareTo(lastPrice.multiply(sellFactor)) < 0;
+                            sellProfitable = buyPrice.multiply(sellFactor).compareTo(lastPrice.multiply(buyFactor)) > 0;
+                        }
+                        boolean downsideUp = !shortEmaAbove && shortEma.compareTo(longEma) > 0;
+                        boolean upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
+                        boolean macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
+                        boolean macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
 
+                        order = null;
+                        if (buyProfitable && (macdDownsideUp || (downsideUp && deltaMacd.signum() > 0))) 
+                        {
+                            shortEmaAbove = true;
+ 			                order = buyCurrency(depth);
+                        }
+                        else if (sellProfitable && (macdUpsideDown || (upsideDown && deltaMacd.signum() < 0))) 
+                        {
+                            shortEmaAbove = false;
+ 			                order = sellCurrency(depth); 
+                        }
+                        reportCycleSummary();
+                        
+                    }
+                    catch (Exception e)
+                    {
+                        logger.error(e);
+                    }
+                    finally
+                    {
+                        sleepUntilNextCycle(t1);
+                    } 
+		        }
+		    }
+
+            private void initTrade()
+            {
+                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
                 // sell factor =                  (1 + MIN_PROFIT) / (1 - fee)^2 = (1 + MIN_PROFIT) / (1 - 2*fee + fee^2);
                 //  buy factor = 1 / sellFactor = (1 - fee)^2 / (1 + MIN_PROFIT) = (1 - 2*fee + fee^2) / (1 + MIN_PROFIT);
                 BigDecimal numberOne = new BigDecimal("1"); 
@@ -301,8 +351,8 @@ public class MaBot implements TradeBot {
                 BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
                 BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
                 BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
-                BigDecimal sellFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
-		        BigDecimal buyFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                sellFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
+		        buyFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
                 
                 logger.info("fee = " + fee);
                 logger.info("bf  = " + sellFactor);
@@ -323,84 +373,7 @@ public class MaBot implements TradeBot {
 
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
-
-                while( _updateThread == this) 
-                {  // While the bot thread is not stopped...
-                   
-                    long t1 = System.currentTimeMillis();
-                    lastMacd = macd;
-                    //boolean toBuy = false;
-                    //boolean toSell = false;
-
-                    try
-                    {
-                        //check if there are pending orders to cancel
-                        /*
-                        Map<String, Order> allOrders = orderBook.getOrders();
-                        for (int orderIndex = 0; orderIndex < allOrders.size(); ++orderIndex) 
-                        {
-                            String orderKey = (String) (allOrders.keySet().toArray()[orderIndex]);
-                            Order currentOrder = allOrders.get(orderKey);
-                            if (currentOrder.getStatus() != OrderStatus.FILLED)
-                            {
-                                if (currentOrder.getOrderType() == OrderType.BUY)
-                                {
-                                    toBuy = true;
-                                }
-                                else
-                                {
-                                    toSell = true;
-                                }
-                                orderBook.cancelOrder(currentOrder);
-                            }
-                        }*/
-
-                        shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
-                        longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
-                        macd = shortEma.subtract(longEma);
-                        deltaMacd = macd.subtract(lastMacd);
-  	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
-                        buyPrice = depth.getBuy(0).getPrice();
-                        sellPrice = depth.getSell(0).getPrice();
-                        
-                        if (lastPrice != null)
-                        {
-                            buyProfitable = sellPrice.multiply(buyFactor).compareTo(lastPrice.multiply(sellFactor)) < 0;
-                            sellProfitable = buyPrice.multiply(sellFactor).compareTo(lastPrice.multiply(buyFactor)) > 0;
-                        }
-                        boolean downsideUp = !shortEmaAbove && shortEma.compareTo(longEma) > 0;
-                        boolean upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
-                        boolean macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
-                        boolean macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
-                        //System.out.println("buy (shortEma > longEma) :  " + (shortEma.compareTo(longEma) > 0));
-                        //System.out.println("sell (shortEma < longEma): " + (shortEma.compareTo(longEma) < 0));
-
-                        order = null;
-                        if (buyProfitable && (macdDownsideUp || (downsideUp && deltaMacd.signum() > 0))) 
-                        {
-                            shortEmaAbove = true;
-                            //toBuy = false;
- 			                order = buyCurrency(depth);
-                        }
-                        else if (sellProfitable && (macdUpsideDown || (upsideDown && deltaMacd.signum() < 0))) 
-                        {
-                            shortEmaAbove = false;
-                            //toSell = false;
- 			                order = sellCurrency(depth); 
-                        }
-                        reportCycleSummary();
-                        
-                    }
-                    catch (Exception e)
-                    {
-                        logger.error(e);
-                    }
-                    finally
-                    {
-                        sleepUntilNextCycle(t1);
-                    } 
-		        }
-		    }
+           }
 
             private void reportCycleSummary()
             {
