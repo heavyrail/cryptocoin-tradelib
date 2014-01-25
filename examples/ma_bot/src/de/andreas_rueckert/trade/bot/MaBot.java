@@ -70,9 +70,13 @@ public class MaBot implements TradeBot {
     // Static variables
 
     /**
-     * The minimal profit in percent for a trade, compared to the SMA.
+     * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00099653261"); // magic :)))))
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.001");
+
+    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.05");
+
+    private final static BigDecimal PROFIT_TO_TAKE = new BigDecimal("0.25");
 
     /**
      * The minimal trade volume.
@@ -132,6 +136,8 @@ public class MaBot implements TradeBot {
     private CryptoCoinOrderBook orderBook;
 
     private Price lastPrice = null;
+
+    private BigDecimal targetBuyPrice = null;
     
     // Constructors
 
@@ -278,13 +284,16 @@ public class MaBot implements TradeBot {
             Price buyPrice = null;
             Price sellPrice = null;
             boolean shortEmaAbove;
-            boolean buyProfitable = true;
-            boolean sellProfitable = true;
+            boolean upsideDown;
+            boolean downsideUp;
+            boolean macdUpsideDown;
+            boolean macdDownsideUp;
             Order order;
             Order lastDeal;
             ChartAnalyzer analyzer = null;
             BigDecimal sellFactor;
-            BigDecimal buyFactor;
+            BigDecimal stopLossFactor;
+            BigDecimal takeProfitFactor;
 
             /**
             * The main bot thread.
@@ -305,26 +314,20 @@ public class MaBot implements TradeBot {
   	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
                         buyPrice = depth.getBuy(0).getPrice();
                         sellPrice = depth.getSell(0).getPrice();
-                        
-                        if (lastPrice != null)
-                        {
-                            buyProfitable = sellPrice.multiply(buyFactor).compareTo(lastPrice.multiply(sellFactor)) < 0;
-                            sellProfitable = buyPrice.multiply(sellFactor).compareTo(lastPrice.multiply(buyFactor)) > 0;
-                        }
-                        boolean downsideUp = !shortEmaAbove && shortEma.compareTo(longEma) > 0;
-                        boolean upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
-                        boolean macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
-                        boolean macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
+                        boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
+                        downsideUp = !shortEmaAbove && newShortEmaAbove;
+                        upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
+                        shortEmaAbove = newShortEmaAbove;
+                        macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
+                        macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
 
                         order = null;
-                        if (buyProfitable && (macdDownsideUp || (downsideUp && deltaMacd.signum() > 0))) 
+                        if (isTimeToBuy()) 
                         {
-                            shortEmaAbove = true;
  			                order = buyCurrency(depth);
                         }
-                        else if (sellProfitable && (macdUpsideDown || (upsideDown && deltaMacd.signum() < 0))) 
+                        else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
                         {
-                            shortEmaAbove = false;
  			                order = sellCurrency(depth); 
                         }
                         reportCycleSummary();
@@ -343,7 +346,7 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
-                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
                 // sell factor =                  (1 + MIN_PROFIT) / (1 - fee)^2 = (1 + MIN_PROFIT) / (1 - 2*fee + fee^2);
                 //  buy factor = 1 / sellFactor = (1 - fee)^2 / (1 + MIN_PROFIT) = (1 - 2*fee + fee^2) / (1 + MIN_PROFIT);
                 BigDecimal numberOne = new BigDecimal("1"); 
@@ -351,12 +354,14 @@ public class MaBot implements TradeBot {
                 BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
                 BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
                 BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
-                sellFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
-		        buyFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                //buylFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
+		        sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                takeProfitFactor = numberOne.add(PROFIT_TO_TAKE);
+                stopLossFactor = numberOne.subtract(LOSS_TO_STOP);
                 
                 logger.info("fee = " + fee);
-                logger.info("bf  = " + sellFactor);
-                logger.info("sf  = " + buyFactor);
+                logger.info("sf  = " + sellFactor);
+                //logger.info("bf  = " + buyFactor);
 
                 try
                 {
@@ -373,7 +378,145 @@ public class MaBot implements TradeBot {
 
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
-           }
+            }
+
+            private boolean isTakeProfit()
+            {
+                if (lastPrice == null)
+                {
+                    return false;
+                }
+                boolean result = buyPrice.compareTo(lastPrice.multiply(takeProfitFactor)) > 0 && macd.signum() > 0;
+                if (result)
+                {
+                    logger.info("*** Take Profit ***");
+                }
+                return result;
+            }
+
+            private boolean isStopLoss()
+            {
+                if (lastPrice == null)
+                {
+                    return false;
+                }
+                boolean result = buyPrice.compareTo(lastPrice.multiply(stopLossFactor)) < 0 && macd.signum() < 0;
+                if (result)
+                {
+                    logger.info("*** Stop Loss ***");
+                }
+                return result;
+            }
+
+            private boolean isMinProfit()
+            {
+                boolean result = false;
+                if (lastPrice != null && targetBuyPrice != null)
+                {
+                    boolean sellProfitable = buyPrice.compareTo(targetBuyPrice) > 0;
+                    if (sellProfitable && isTrendDown())
+                    {
+                        result = true;
+                    }
+                }
+                if (result)
+                {
+                    logger.info("*** Minimal Profit ***");
+                }
+                return result;
+            }
+
+            private boolean isTrendDown()
+            {
+                return macdUpsideDown || (upsideDown && deltaMacd.signum() < 0);
+            }
+
+            private boolean isTimeToSell()
+            {
+                if (lastPrice != null)
+                {
+                    return false;
+                }
+                boolean result = isTrendDown();
+                if (result)
+                {
+                    logger.info("*** Time To Sell ***");
+                }
+                return result;
+            }
+            
+            private boolean isTimeToBuy()
+            {
+                boolean result = macdDownsideUp || (downsideUp && deltaMacd.signum() > 0);
+                if (result)
+                {
+                    logger.info("*** Time To Buy ***");
+                }
+                return result;
+            }
+
+
+            private Order buyCurrency(Depth depth)
+            {
+                // Check, if there is an opportunity to buy something, and the volume of the
+		        // order is higher than the minimum trading volume.
+
+                DepthOrder depthOrder = depth.getSell(0);
+                Amount availableAmount = depthOrder.getAmount();
+ 		        if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                {
+		            // Now check, if we have any funds to buy something.
+                    Price sellPrice = depthOrder.getPrice();
+			        Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
+
+			        // If the volume is bigger than the min volume, do the actual trade.
+			        if (buyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                    {
+
+			            // Compute the actual amount to trade.
+				        Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
+
+				        // Create a buy order...
+			            String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
+                                _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
+                        lastPrice = sellPrice;
+                        targetBuyPrice = sellPrice.multiply(sellFactor);
+		                return orderBook.getOrder(orderId);
+                    }
+                }        
+                return null;
+            }
+
+            private Order sellCurrency(Depth depth)
+            {
+                // Check, if there is an opportunity to sell some funds, and the volume of the order
+                // is higher than the minimum trading volume.
+                // 
+                DepthOrder depthOrder = depth.getBuy(0);
+                Amount availableAmount = depthOrder.getAmount();
+                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                {
+		            // Now check, if we have any funds to sell.
+			        Amount sellAmount = new Amount(getFunds(currency));
+
+			        // If the volume is bigger than the min volume, do the actual trade.
+                    if (sellAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                    {
+
+                        // Compute the actual amount to trade.
+	                    Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
+
+	                    // Create a sell order...
+                        Price buyPrice = depthOrder.getPrice();
+		                String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
+                                _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
+                        lastPrice = buyPrice;
+                        targetBuyPrice = null;
+                        return orderBook.getOrder(orderId);
+                    }
+		        }
+                return null;
+            }
 
             private void reportCycleSummary()
             {
@@ -381,7 +524,6 @@ public class MaBot implements TradeBot {
                 if (order != null)
                 {
                     logger.info(String.format("current deal      | %s", order));
-                    logger.info(String.format(" \\-status         | %s", order.getStatus()));
                     lastDeal = order;
                 }
                 else
@@ -391,7 +533,7 @@ public class MaBot implements TradeBot {
                 if (lastDeal != null)
                 {
                     logger.info(String.format("last deal         | %s", lastDeal));
-                    logger.info(String.format(" \\-status         | %s", lastDeal.getStatus()));
+                    logger.info(String.format("      +-status    | %s", lastDeal.getStatus()));
                 }
                 else
                 {
@@ -399,15 +541,22 @@ public class MaBot implements TradeBot {
                 }
                 String priceTrend = macd.signum() > 0 ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
-                String buyProfitableFlag = buyProfitable ? "*" : " ";
-                String sellProfitableFlag = sellProfitable ? "*" : " ";
-                logger.info(String.format("buy               |                 %12f      [ %s ]       |", buyPrice, sellProfitableFlag));
-                logger.info(String.format("sell              |                 %12f      [ %s ]       |", sellPrice, buyProfitableFlag));
+                logger.info(String.format("%3s               |                 %12f                  |", currency, getFunds(currency)));
+                logger.info(String.format("%3s               |                 %12f                  |", payCurrency, getFunds(payCurrency)));
+                if (targetBuyPrice != null)
+                {
+                    logger.info(String.format("buy               |                 %12f [ %12f ] |", buyPrice, targetBuyPrice));
+                }
+                else
+                {
+                    logger.info(String.format("buy               |                 %12f                  |", buyPrice));
+                }
+                logger.info(String.format("sell              |                 %12f                  |", sellPrice));
                 logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_SHORT_INTERVAL, shortEma));
                 logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_LONG_INTERVAL, longEma));
                 logger.info(String.format("macd              |                 %12f      [ %s ]       |", macd, priceTrend));
-                logger.info(String.format(" +-prev           |                 %12f                  |", lastMacd));
-                logger.info(String.format(" +-delta          |                 %12f      [ %s ]       |", deltaMacd, macdTrend));
+                logger.info(String.format("  +-prev          |                 %12f                  |", lastMacd));
+                logger.info(String.format("  +-delta         |                 %12f      [ %s ]       |", deltaMacd, macdTrend));
                 logger.info(              "------------------+-----------------------------------------------+");
             }
 
@@ -432,67 +581,6 @@ public class MaBot implements TradeBot {
 	    _updateThread.start();  // Start the update thread.
     }
     
-    private Order buyCurrency(Depth depth)
-    {
-        // Check, if there is an opportunity to buy something, and the volume of the
-		// order is higher than the minimum trading volume.
-
-        DepthOrder depthOrder = depth.getSell(0);
-        Amount availableAmount = depthOrder.getAmount();
- 		if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-        {
-		    // Now check, if we have any funds to buy something.
-            Price sellPrice = depthOrder.getPrice();
-			Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
-
-			// If the volume is bigger than the min volume, do the actual trade.
-			if (buyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-            {
-
-			    // Compute the actual amount to trade.
-				Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
-
-				// Create a buy order...
-			    String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
-                        _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
-                lastPrice = sellPrice;
-		        return orderBook.getOrder(orderId);
-            }
-        }        
-        return null;
-    }
-
-    private Order sellCurrency(Depth depth)
-    {
-        // Check, if there is an opportunity to sell some funds, and the volume of the order
-        // is higher than the minimum trading volume.
-        // 
-        DepthOrder depthOrder = depth.getBuy(0);
-        Amount availableAmount = depthOrder.getAmount();
-        if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-        {
-		    // Now check, if we have any funds to sell.
-			Amount sellAmount = new Amount(getFunds(currency));
-
-			// If the volume is bigger than the min volume, do the actual trade.
-            if (sellAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-            {
-
-                // Compute the actual amount to trade.
-	            Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
-
-	            // Create a sell order...
-                Price buyPrice = depthOrder.getPrice();
-		        String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
-                       _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
-                lastPrice = buyPrice;
-                return orderBook.getOrder(orderId);
-            }
-		}
-        return null;
-    }
-
-
     /**
      * Stop the bot.
      */
