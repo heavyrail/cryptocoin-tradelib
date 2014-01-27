@@ -39,6 +39,7 @@ import de.andreas_rueckert.trade.Depth;
 import de.andreas_rueckert.trade.Trade;
 import de.andreas_rueckert.trade.order.CryptoCoinOrderBook;
 import de.andreas_rueckert.trade.order.Order;
+import de.andreas_rueckert.trade.order.SiteOrder;
 
 import de.andreas_rueckert.trade.order.OrderFactory;
 import de.andreas_rueckert.trade.order.OrderType;
@@ -81,7 +82,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.01");
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.1");
 
     /**
      * The interval for the SMA value.
@@ -307,10 +308,16 @@ public class MaBot implements TradeBot {
                     lastMacd = macd;
                     try
                     {
+                        if (lastDeal != null && lastDeal.getStatus() == OrderStatus.PARTIALLY_FILLED)
+                        {
+                            _tradeSite.cancelOrder((SiteOrder) lastDeal);
+                        }
                         shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                         longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                         macd = shortEma.subtract(longEma);
+                        //macdTrend = macd.signum();
                         deltaMacd = macd.subtract(lastMacd);
+                        //deltaMacdTrend = deltaMacd.signum();
   	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
                         buyPrice = depth.getBuy(0).getPrice();
                         sellPrice = depth.getSell(0).getPrice();
@@ -428,7 +435,8 @@ public class MaBot implements TradeBot {
 
             private boolean isTrendDown()
             {
-                return macdUpsideDown || (upsideDown && deltaMacd.signum() < 0);
+                //return macdUpsideDown || (upsideDown && deltaMacd.signum() < 0);
+                return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
             }
 
             private boolean isTimeToSell()
@@ -447,7 +455,8 @@ public class MaBot implements TradeBot {
             
             private boolean isTimeToBuy()
             {
-                boolean result = macdDownsideUp || (downsideUp && deltaMacd.signum() > 0);
+                //boolean result = macdDownsideUp || (downsideUp && deltaMacd.signum() > 0);
+                boolean result = macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
                 if (result)
                 {
                     logger.info("*** Time To Buy ***");
