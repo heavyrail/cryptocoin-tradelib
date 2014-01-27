@@ -337,8 +337,13 @@ public class MaBot implements TradeBot {
                         {
  			                order = sellCurrency(depth); 
                         }
-                        reportCycleSummary();
-                        
+                        try
+                        {
+                            reportCycleSummary();
+                        }
+                        catch (Exception e)
+                        {
+                        }
                     }
                     catch (Exception e)
                     {
