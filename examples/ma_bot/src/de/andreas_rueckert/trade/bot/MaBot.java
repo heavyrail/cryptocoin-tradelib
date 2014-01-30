@@ -163,7 +163,9 @@ public class MaBot implements TradeBot {
         System.exit(-1);
     }
     _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
-    _tradeSite = new BtcEClient();
+    //_traideSite = new BtcEClient();
+    _tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BTCe");
+    
     PersistentPropertyList settings = new PersistentPropertyList();
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
@@ -343,6 +345,7 @@ public class MaBot implements TradeBot {
                         }
                         catch (Exception e)
                         {
+                            logger.error(e);
                         }
                     }
                     catch (Exception e)
@@ -351,6 +354,7 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
+                        System.gc();
                         sleepUntilNextCycle(t1);
                     } 
 		        }
@@ -555,8 +559,8 @@ public class MaBot implements TradeBot {
                 }
                 String priceTrend = macd.signum() > 0 ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
-                logger.info(String.format("%3s               |                 %12f                  |", currency, getFunds(currency)));
-                logger.info(String.format("%3s               |                 %12f                  |", payCurrency, getFunds(payCurrency)));
+                logger.info(String.format("%3s               |                 %12s                  |", currency, getFunds(currency).toPlainString()));
+                logger.info(String.format("%3s               |                 %12s                  |", payCurrency, getFunds(payCurrency).toPlainString()));
                 if (targetBuyPrice != null)
                 {
                     logger.info(String.format("buy               |                 %12f [ %12f ] |", buyPrice, targetBuyPrice));
