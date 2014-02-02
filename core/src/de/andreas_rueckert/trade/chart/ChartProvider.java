@@ -124,7 +124,8 @@ public class ChartProvider {
 	    
 	    // Now remove all the deprecated calls.
 	    for( TradeSiteCall currentCall : callsToRemove) {
-		_cachedCalls.remove( currentCall);
+		LogUtils.getInstance().getLogger().info("***** REMOVE *****");
+        _cachedCalls.remove( currentCall);
 	    }
 
 	    return null;  // No previous result found.
@@ -298,7 +299,9 @@ public class ChartProvider {
 	 */
 	public final boolean isDated() {
 
-	    return ( TimeUtils.getInstance().getCurrentGMTTimeMicros() - _timestamp) > getTradeSite().getUpdateInterval();	    
+        boolean result = ( TimeUtils.getInstance().getCurrentGMTTimeMicros() - _timestamp) > getTradeSite().getUpdateInterval(); 
+        LogUtils.getInstance().getLogger().info("***** IS_DATED: " + result + " *****");
+        return result;	    
 	}
 
 	/**
@@ -364,7 +367,7 @@ public class ChartProvider {
     /**
      * The current log level.
      */
-    private int _logLevel = LOGLEVEL_ERROR;
+    private int _logLevel = LOGLEVEL_DEBUG;
 
     /**
      * The offset of this chart provider from GMT.
@@ -574,7 +577,7 @@ public class ChartProvider {
 	    // Update the timestamp in the cached call to consider the duration of the request.
 	    tradeSiteCall.updateTimestamp();
 	    
-	    _tradeSiteCache.putCall( tradeSiteCall, callResult);  // Add the new result to the cache.
+	    //_tradeSiteCache.putCall( tradeSiteCall, callResult);  // Add the new result to the cache.
 	    
 	    return callResult;   // And return the result of the request.
 	}
@@ -724,7 +727,7 @@ public class ChartProvider {
 	    // Update the timestamp in the cached call to consider the duration of the request.
 	    tradeSiteCall.updateTimestamp();
 
-	    _tradeSiteCache.putCall( tradeSiteCall, callResult);  // Update the cache with the new result.
+	    //_tradeSiteCache.putCall( tradeSiteCall, callResult);  // Update the cache with the new result.
 
 	    return callResult;   // And return the result of the request.
 	}
