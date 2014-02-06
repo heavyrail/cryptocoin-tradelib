@@ -111,6 +111,13 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
     private static long _nonce;
 
     /**
+     * This flag is intended for ability to retry the request in the case nonce lose synchronization with the server
+     * (see usage below in the code)
+     */
+    private static boolean retryOnFail = true;
+    
+    
+    /**
      * The default user agent.
      */
     private static String USERAGENT = "Mozilla";
@@ -370,6 +377,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 	} catch( UnsupportedEncodingException uee) {
 
 	    System.err.println( "Unsupported encoding exception: " + uee.toString());
+        retryOnFail = true; // ensure next time we call this method, it would have the ability to retry the request if needed
 	    return null;
 	} 
 
@@ -381,6 +389,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 	} catch( NoSuchAlgorithmException nsae) {
 
 	    System.err.println( "No such algorithm exception: " + nsae.toString());
+        retryOnFail = true;
 	    return null;
 	}
 
@@ -389,6 +398,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 	    mac.init( key);
 	} catch( InvalidKeyException ike) {
 	    System.err.println( "Invalid key exception: " + ike.toString());
+        retryOnFail = true;
 	    return null;
 	}
 
@@ -402,6 +412,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 	} catch( UnsupportedEncodingException uee) {
 
 	    System.err.println( "Unsupported encoding exception: " + uee.toString());
+        retryOnFail = true;
 	    return null;
 	} 
 	
@@ -419,23 +430,35 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 
 		if( success == 0) {  // The request failed.
 		    String errorMessage = jsonResult.getString( "error");
-
-		    LogUtils.getInstance().getLogger().error( "btc-e.com trade API request failed: " + errorMessage);
-
-		    return null;
+            LogUtils.getInstance().getLogger().error( "btc-e.com trade API request failed: " + errorMessage);
+            if (retryOnFail && errorMessage.indexOf("nonce") != -1) // if nonce is bad and we are allowed to retry request... 
+            {
+                retryOnFail = false; // before we retry, disable retryOnFail to prevent endless retry
+                _nonce++;             // increment nonce
+                LogUtils.getInstance().getLogger().error( "oh no! bad nonce... hold on, we are to increment it and retry");
+                return authenticatedHTTPRequest(method, arguments, userAccount); // recursively call the method to retry
+            }
+            else
+            {
+                retryOnFail = true; // ensure retry capability in now on, no matter what state it was before
+                return null;
+            }
 
 		} else {  // Request succeeded!
-
+            retryOnFail = true;         // this request has been successful,
+                                        // however next one will be allowed to retry should it fails
 		    return jsonResult.getJSONObject( "return");
 		}
 
 	    } catch( JSONException je) {
 		System.err.println( "Cannot parse json request result: " + je.toString());
 
-		return null;  // An error occured...
+        retryOnFail = true;
+        return null;  // An error occured...
 	    }
 	} 
 
+    retryOnFail = true;
 	return null;  // The request failed.
     }
 
