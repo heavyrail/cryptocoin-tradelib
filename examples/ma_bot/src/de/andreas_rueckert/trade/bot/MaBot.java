@@ -317,9 +317,7 @@ public class MaBot implements TradeBot {
                         shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                         longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                         macd = shortEma.subtract(longEma);
-                        //macdTrend = macd.signum();
                         deltaMacd = macd.subtract(lastMacd);
-                        //deltaMacdTrend = deltaMacd.signum();
   	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
                         buyPrice = depth.getBuy(0).getPrice();
                         sellPrice = depth.getSell(0).getPrice();
@@ -354,7 +352,6 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
-                        System.gc();
                         sleepUntilNextCycle(t1);
                     } 
 		        }
@@ -363,21 +360,16 @@ public class MaBot implements TradeBot {
             private void initTrade()
             {
                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
-                // sell factor =                  (1 + MIN_PROFIT) / (1 - fee)^2 = (1 + MIN_PROFIT) / (1 - 2*fee + fee^2);
-                //  buy factor = 1 / sellFactor = (1 - fee)^2 / (1 + MIN_PROFIT) = (1 - 2*fee + fee^2) / (1 + MIN_PROFIT);
                 BigDecimal numberOne = new BigDecimal("1"); 
                 BigDecimal doubleFee = fee.add(fee);
                 BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
                 BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
                 BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
-                //buylFactor = priceCoeff.divide(profitCoeff, MathContext.DECIMAL128);
 		        sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
                 takeProfitFactor = numberOne.add(PROFIT_TO_TAKE);
                 stopLossFactor = numberOne.subtract(LOSS_TO_STOP);
-                
                 logger.info("fee = " + fee);
                 logger.info("sf  = " + sellFactor);
-                //logger.info("bf  = " + buyFactor);
 
                 try
                 {
