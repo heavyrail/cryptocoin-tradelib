@@ -85,7 +85,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public boolean cancelOrder( SiteOrder order) {
 
-	throw new NotYetImplementedException( "Cancelling an order is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Cancelling an order is not yet implemented for " + _name);
     }
 
     /**
@@ -98,7 +98,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public synchronized OrderStatus executeOrder( SiteOrder order) {
 
-	throw new NotYetImplementedException( "Executing an order is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Executing an order is not yet implemented for " + _name);
     }
 
     /**
@@ -110,7 +110,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public Collection<TradeSiteAccount> getAccounts( TradeSiteUserAccount userAccount) {
 
-	throw new NotYetImplementedException( "Getting the accounts is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Getting the accounts is not yet implemented for " + _name);
     }
 
     /**
@@ -122,7 +122,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public Depth getDepth( CurrencyPair currencyPair) throws TradeDataNotAvailableException {
 
-	throw new NotYetImplementedException( "Getting the depth is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Getting the depth is not yet implemented for " + _name);
     }
 
     /**
@@ -144,7 +144,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public Collection<SiteOrder> getOpenOrders( TradeSiteUserAccount userAccount) {
 
-	throw new NotYetImplementedException( "Getting the open orders is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Getting the open orders is not yet implemented for " + _name);
     }
 
     /**
@@ -169,7 +169,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public Ticker getTicker( CurrencyPair currencyPair) throws TradeDataNotAvailableException {
 
-	throw new NotYetImplementedException( "Getting the ticker is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Getting the ticker is not yet implemented for " + _name);
     }
 
     /**
@@ -184,7 +184,7 @@ public class KrakenClient extends TradeSiteImpl implements TradeSite {
      */
     public CryptoCoinTrade [] getTrades( long since_micros, CurrencyPair currencyPair) throws TradeDataNotAvailableException {
 
-	throw new NotYetImplementedException( "Getting the trades is not yet implemented for kraken");
+	throw new NotYetImplementedException( "Getting the trades is not yet implemented for " + _name);
     }
 
     /**
