@@ -188,6 +188,10 @@ public abstract class OrderBook {
                 executeOrder( currentOrder);
                 _executedOrders.put(currentOrder.getId(), currentOrder);
             }
+            else
+            {
+                System.out.println(currentOrder);
+            }
 		}
 	    }
 	}
