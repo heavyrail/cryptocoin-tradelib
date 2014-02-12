@@ -106,6 +106,9 @@ public class MaBot implements TradeBot {
     private final static String MACD_LONG_INTERVAL = "26m";
     private final static String MACD_SMA_INTERVAL = "9m";
 
+    /* Maximum number of attempts to retry an order failed due to insufficient funds/depth */
+    private final static int MAX_PENDING_ATTEMPTS = 5;
+
     // Instance variables
 
     /**
@@ -139,6 +142,10 @@ public class MaBot implements TradeBot {
     private Price lastPrice = null;
 
     private BigDecimal targetBuyPrice = null;
+
+    private int pendingBuyAttempts;
+
+    private int pendingSellAttempts;
     
     // Constructors
 
@@ -332,10 +339,26 @@ public class MaBot implements TradeBot {
                         if (isTimeToBuy()) 
                         {
  			                order = buyCurrency(depth);
+                            if (order == null)
+                            {
+                                pendingBuyAttempts = pendingBuyAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingBuyAttempts - 1;
+                            }
+                            else
+                            {
+                                pendingBuyAttempts = 0;
+                            }
                         }
                         else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
                         {
  			                order = sellCurrency(depth); 
+                            if (order == null)
+                            {
+                                pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
+                            }
+                            else
+                            {
+                                pendingSellAttempts = 0;
+                            }
                         }
                         try
                         {
@@ -359,6 +382,8 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
+                pendingBuyAttempts = 0;
+                pendingSellAttempts = 0;
                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
                 BigDecimal numberOne = new BigDecimal("1"); 
                 BigDecimal doubleFee = fee.add(fee);
@@ -436,44 +461,61 @@ public class MaBot implements TradeBot {
 
             private boolean isTrendDown()
             {
-                //return macdUpsideDown || (upsideDown && deltaMacd.signum() < 0);
                 return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
             }
 
+            private boolean isTrendUp()
+            {
+                return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
+            }
+            
             private boolean isTimeToSell()
             {
-                if (lastPrice != null)
+                if (isTrendDown())
                 {
-                    return false;
+                    // we would retry sell order only if trend is still down
+                    boolean needToRetry = pendingSellAttempts > 0;
+                    if (lastPrice == null || needToRetry)
+                    {
+                        logger.info(String.format("*** Time To Sell [%d] ***", pendingSellAttempts));
+                        if (needToRetry)
+                        {
+                            pendingSellAttempts--;
+                        }
+                        return true;
+                    }
                 }
-                boolean result = isTrendDown();
-                if (result)
-                {
-                    logger.info("*** Time To Sell ***");
-                }
-                return result;
+                return false;
             }
             
             private boolean isTimeToBuy()
             {
-                //boolean result = macdDownsideUp || (downsideUp && deltaMacd.signum() > 0);
-                boolean result = macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
+                boolean result = isTrendUp();
                 if (result)
                 {
-                    logger.info("*** Time To Buy ***");
+                    logger.info(String.format("*** Time To Buy [%d] ***", pendingBuyAttempts));
                 }
                 return result;
             }
-
 
             private Order buyCurrency(Depth depth)
             {
                 // Check, if there is an opportunity to buy something, and the volume of the
 		        // order is higher than the minimum trading volume.
 
-                DepthOrder depthOrder = depth.getSell(0);
-                Amount availableAmount = depthOrder.getAmount();
- 		        if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                int sellOrders = depth.getSellSize();
+                int i = 0;
+                DepthOrder depthOrder = null;
+                Amount availableAmount = null;
+                do
+                {
+                    depthOrder = depth.getSell(i);
+                    availableAmount = depthOrder.getAmount();
+                    i++;
+                }
+                while (i < sellOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
+                
+                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0)
                 {
 		            // Now check, if we have any funds to buy something.
                     Price sellPrice = depthOrder.getPrice();
@@ -501,9 +543,19 @@ public class MaBot implements TradeBot {
             {
                 // Check, if there is an opportunity to sell some funds, and the volume of the order
                 // is higher than the minimum trading volume.
-                // 
-                DepthOrder depthOrder = depth.getBuy(0);
-                Amount availableAmount = depthOrder.getAmount();
+
+                int buyOrders = depth.getBuySize();
+                int i = 0;
+                DepthOrder depthOrder = null;
+                Amount availableAmount = null;
+                do
+                {
+                    depthOrder = depth.getBuy(i);
+                    availableAmount = depthOrder.getAmount();
+                    i++;
+                }
+                while (i < buyOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);            
+
                 if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
                 {
 		            // Now check, if we have any funds to sell.
