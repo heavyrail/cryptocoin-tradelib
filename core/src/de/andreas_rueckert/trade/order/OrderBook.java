@@ -165,6 +165,11 @@ public abstract class OrderBook {
 
 		    // Now get the order via the key.
 		    Order currentOrder = getOrders().get( orderKey);
+            // DEBUG BLOCK - delete in production
+            if (currentOrder == null)
+            {
+                System.out.println("NULL");
+            }
 
 		    if( currentOrder.hasDependencies()) {  // If this order has dependencies..
 
@@ -187,10 +192,6 @@ public abstract class OrderBook {
 			if( ! currentOrder.hasDependencies() && s != OrderStatus.FILLED && s != OrderStatus.PARTIALLY_FILLED) {
                 executeOrder( currentOrder);
                 _executedOrders.put(currentOrder.getId(), currentOrder);
-            }
-            else
-            {
-                System.out.println(currentOrder);
             }
 		}
 	    }
