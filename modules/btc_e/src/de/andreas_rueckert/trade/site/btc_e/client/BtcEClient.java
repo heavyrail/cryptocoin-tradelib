@@ -435,7 +435,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
             {
                 retryOnFail = false; // before we retry, disable retryOnFail to prevent endless retry
                 String leftPart = errorMessage.split(",")[0]; // extract nonce from response
-                int nonceIdx = leftPart.indexOf("key:") + 3;
+                int nonceIdx = leftPart.indexOf("key:") + 4;
                 String trueNonce = leftPart.substring(nonceIdx);
                 _nonce = Long.parseLong(trueNonce);
                 LogUtils.getInstance().getLogger().error( "oh no! bad nonce... hold on, we are to increment it and retry");
