@@ -340,7 +340,7 @@ public class MaBot implements TradeBot {
                         {
                             BigDecimal oldCurrencyAmount = getFunds(currency);
  			                order = buyCurrency(depth);
-                            if (oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
+                            if (order != null && oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
                                 logger.info("buy order is not null, but nothing changed!");
                                 decrementPendingBuyAttempts();
@@ -350,7 +350,7 @@ public class MaBot implements TradeBot {
                         {
                             BigDecimal oldCurrencyAmount = getFunds(currency);
  			                order = sellCurrency(depth); 
-                            if (oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
+                            if (order != null && oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
                                 logger.info("sell order is not null, but nothing changed!");
                                 decrementPendingSellAttempts();
