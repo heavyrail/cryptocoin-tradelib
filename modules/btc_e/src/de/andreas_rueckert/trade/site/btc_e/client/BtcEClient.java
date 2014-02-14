@@ -434,7 +434,10 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
             if (retryOnFail && errorMessage.indexOf("nonce") != -1) // if nonce is bad and we are allowed to retry request... 
             {
                 retryOnFail = false; // before we retry, disable retryOnFail to prevent endless retry
-                _nonce++;             // increment nonce
+                String leftPart = errorMessage.split(",")[0]; // extract nonce from response
+                int nonceIdx = leftPart.indexOf("key:") + 3;
+                String trueNonce = leftPart.substring(nonceIdx);
+                _nonce = Long.parseLong(trueNonce);
                 LogUtils.getInstance().getLogger().error( "oh no! bad nonce... hold on, we are to increment it and retry");
                 return authenticatedHTTPRequest(method, arguments, userAccount); // recursively call the method to retry
             }
@@ -537,6 +540,8 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
 	    if( jsonResponse == null) {
 		return OrderStatus.ERROR;
 	    } else {
+        //TODO remove in production
+        System.out.println(jsonResponse);
 		// Try to get and store the site id for the order first, so we can access the order later.
 		long btceOrderId = jsonResponse.getLong( "order_id");
 
