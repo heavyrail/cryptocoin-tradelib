@@ -338,27 +338,23 @@ public class MaBot implements TradeBot {
                         order = null;
                         if (isTimeToBuy()) 
                         {
+                            BigDecimal oldCurrencyAmount = getFunds(currency);
  			                order = buyCurrency(depth);
-                            if (order == null)
+                            if (oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
-                                pendingBuyAttempts = pendingBuyAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingBuyAttempts - 1;
-                            }
-                            else
-                            {
-                                pendingBuyAttempts = 0;
-                            }
+                                logger.info("buy order is not null, but nothing changed!");
+                                decrementPendingBuyAttempts();
+                            }                            
                         }
                         else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
                         {
+                            BigDecimal oldCurrencyAmount = getFunds(currency);
  			                order = sellCurrency(depth); 
-                            if (order == null)
+                            if (oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
-                                pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
-                            }
-                            else
-                            {
-                                pendingSellAttempts = 0;
-                            }
+                                logger.info("sell order is not null, but nothing changed!");
+                                decrementPendingSellAttempts();
+                            }                            
                         }
                         try
                         {
@@ -379,6 +375,16 @@ public class MaBot implements TradeBot {
                     } 
 		        }
 		    }
+
+            private void decrementPendingBuyAttempts()
+            {
+                pendingBuyAttempts = pendingBuyAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingBuyAttempts - 1;
+            }
+
+            private void decrementPendingSellAttempts()
+            {
+                pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
+            }
 
             private void initTrade()
             {
@@ -509,9 +515,8 @@ public class MaBot implements TradeBot {
                 Amount availableAmount = null;
                 do
                 {
-                    depthOrder = depth.getSell(i);
+                    depthOrder = depth.getSell(i++);
                     availableAmount = depthOrder.getAmount();
-                    i++;
                 }
                 while (i < sellOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
                 
@@ -533,9 +538,11 @@ public class MaBot implements TradeBot {
                                 _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
                         lastPrice = sellPrice;
                         targetBuyPrice = sellPrice.multiply(sellFactor);
+                        pendingBuyAttempts = 0;
 		                return orderBook.getOrder(orderId);
                     }
                 }        
+                decrementPendingBuyAttempts();
                 return null;
             }
 
@@ -550,9 +557,8 @@ public class MaBot implements TradeBot {
                 Amount availableAmount = null;
                 do
                 {
-                    depthOrder = depth.getBuy(i);
+                    depthOrder = depth.getBuy(i++);
                     availableAmount = depthOrder.getAmount();
-                    i++;
                 }
                 while (i < buyOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);            
 
@@ -574,9 +580,11 @@ public class MaBot implements TradeBot {
                                 _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
                         lastPrice = buyPrice;
                         targetBuyPrice = null;
+                        pendingSellAttempts = 0;
                         return orderBook.getOrder(orderId);
                     }
 		        }
+                decrementPendingSellAttempts();
                 return null;
             }
 
