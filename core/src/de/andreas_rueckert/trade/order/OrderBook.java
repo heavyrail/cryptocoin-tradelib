@@ -122,8 +122,8 @@ public abstract class OrderBook {
 			    }
 			}
 			
-			if( ! orderIsStillOpen) {  // If the order is no longer open.
-			    //currentOrder.setStatus( OrderStatus.FILLED);  // Set the order status to filled (Ugly hack!)
+			if (!orderIsStillOpen || currentOrder.getStatus() == OrderStatus.ERROR) {  // If the order is no longer open or it is in ERROR state (Ugly hack by P.P.)
+			    //currentOrder.setStatus( OrderStatus.FILLED);  // Set the order status to filled (Ugly hack by Andreas! commented out by P.P.)
 			    _executedOrders.remove( currentOrder);        // Remove this order from the executed orders,
 			    _completedOrders.put( currentOrder.getId(), currentOrder);  // and add it to the completed orders.
 			}
@@ -432,6 +432,7 @@ public abstract class OrderBook {
 
 		if( tradeSite != null) {
 
+            LogUtils.getInstance().getLogger().info("Before execution: " + orderToExecute.getStatus()); //TODO remove order status in production
 		    OrderStatus newStatus = tradeSite.executeOrder( siteOrderToExecute); // If the order could be executed,
 
 		    // Log the executed order. TODO remove order status in production
