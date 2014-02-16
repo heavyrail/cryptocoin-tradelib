@@ -122,7 +122,7 @@ public abstract class OrderBook {
 			    }
 			}
 			
-			if (!orderIsStillOpen || currentOrder.getStatus() == OrderStatus.ERROR) {  // If the order is no longer open or it is in ERROR state (Ugly hack by P.P.)
+			if (!orderIsStillOpen || currentOrder.getStatus() == OrderStatus.ERROR) {  // If the order is no longer open or it is in ERROR/null state (Ugly hack by P.P.)
 			    //currentOrder.setStatus( OrderStatus.FILLED);  // Set the order status to filled (Ugly hack by Andreas! commented out by P.P.)
 			    _executedOrders.remove( currentOrder);        // Remove this order from the executed orders,
 			    _completedOrders.put( currentOrder.getId(), currentOrder);  // and add it to the completed orders.
@@ -191,7 +191,8 @@ public abstract class OrderBook {
             // If all the dependencies have been removed, execute the order now.
             OrderStatus s = currentOrder.getStatus();
 			if( ! currentOrder.hasDependencies() && s != OrderStatus.FILLED && s != OrderStatus.PARTIALLY_FILLED && s != OrderStatus.ERROR) { // Ugly hack by P.P.!
-                executeOrder( currentOrder);
+                s = executeOrder( currentOrder);
+                currentOrder.setStatus(s);
                 _executedOrders.put(currentOrder.getId(), currentOrder);
             }
 		}
