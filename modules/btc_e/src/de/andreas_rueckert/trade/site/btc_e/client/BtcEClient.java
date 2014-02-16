@@ -323,7 +323,7 @@ public class BtcEClient extends TradeSiteImpl implements TradeSite {
      *
      * @see http://pastebin.com/K25Nk2Sv
      */
-    private final JSONObject authenticatedHTTPRequest( String method, Map<String, String> arguments, TradeSiteUserAccount userAccount) {
+    private final synchronized JSONObject authenticatedHTTPRequest( String method, Map<String, String> arguments, TradeSiteUserAccount userAccount) {
 	HashMap<String, String> headerLines = new HashMap<String, String>();  // Create a new map for the header lines.
 	Mac mac;
 	SecretKeySpec key = null;
