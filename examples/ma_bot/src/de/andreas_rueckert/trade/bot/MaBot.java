@@ -143,7 +143,9 @@ public class MaBot implements TradeBot {
 
     private BigDecimal targetBuyPrice = null;
 
-    private int pendingBuyAttempts;
+    //private BigDecimal oldTargetBuyPrice = null;
+
+    //private int pendingBuyAttempts;
 
     private int pendingSellAttempts;
     
@@ -343,7 +345,7 @@ public class MaBot implements TradeBot {
                             if (order != null && oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
                                 logger.info("buy order is not null, but nothing changed!");
-                                decrementPendingBuyAttempts();
+                                //decrementPendingBuyAttempts();
                             }                            
                         }
                         else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
@@ -376,10 +378,10 @@ public class MaBot implements TradeBot {
 		        }
 		    }
 
-            private void decrementPendingBuyAttempts()
+            /*private void decrementPendingBuyAttempts()
             {
                 pendingBuyAttempts = pendingBuyAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingBuyAttempts - 1;
-            }
+            }*/
 
             private void decrementPendingSellAttempts()
             {
@@ -388,7 +390,7 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
-                pendingBuyAttempts = 0;
+                //pendingBuyAttempts = 0;
                 pendingSellAttempts = 0;
                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
                 BigDecimal numberOne = new BigDecimal("1"); 
@@ -499,7 +501,8 @@ public class MaBot implements TradeBot {
                 boolean result = isTrendUp();
                 if (result)
                 {
-                    logger.info(String.format("*** Time To Buy [%d] ***", pendingBuyAttempts));
+                    //logger.info(String.format("*** Time To Buy [%d] ***", pendingBuyAttempts));
+                    logger.info("*** Time To Buy ***");
                 }
                 return result;
             }
@@ -536,13 +539,17 @@ public class MaBot implements TradeBot {
 				        // Create a buy order...
 			            String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
-                        lastPrice = sellPrice;
-                        targetBuyPrice = sellPrice.multiply(sellFactor);
-                        pendingBuyAttempts = 0;
-		                return orderBook.getOrder(orderId);
+                        Order result = orderBook.getOrder(orderId);
+                        if (result != null && result.getStatus() != OrderStatus.ERROR);
+                        {
+                            lastPrice = sellPrice;
+                            targetBuyPrice = sellPrice.multiply(sellFactor);
+                            //pendingBuyAttempts = 0;
+                            return result;
+                        }
                     }
                 }        
-                decrementPendingBuyAttempts();
+                //decrementPendingBuyAttempts();
                 return null;
             }
 
@@ -578,10 +585,14 @@ public class MaBot implements TradeBot {
                         Price buyPrice = depthOrder.getPrice();
 		                String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
-                        lastPrice = buyPrice;
-                        targetBuyPrice = null;
-                        pendingSellAttempts = 0;
-                        return orderBook.getOrder(orderId);
+                        Order result = orderBook.getOrder(orderId);
+                        if (result != null && result.getStatus() != OrderStatus.ERROR);
+                        {
+                            lastPrice = buyPrice;
+                            targetBuyPrice = null;
+                            pendingSellAttempts = 0;
+                            return result;
+                        }
                     }
 		        }
                 decrementPendingSellAttempts();
