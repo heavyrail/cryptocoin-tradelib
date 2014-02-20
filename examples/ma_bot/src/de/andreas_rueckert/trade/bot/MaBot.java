@@ -306,6 +306,8 @@ public class MaBot implements TradeBot {
             BigDecimal sellFactor;
             BigDecimal stopLossFactor;
             BigDecimal takeProfitFactor;
+            BigDecimal oldCurrencyAmount = null;
+            boolean pendingFulfillCheck;
 
             /**
             * The main bot thread.
@@ -322,6 +324,16 @@ public class MaBot implements TradeBot {
                         if (lastDeal != null && lastDeal.getStatus() == OrderStatus.PARTIALLY_FILLED)
                         {
                             _tradeSite.cancelOrder((SiteOrder) lastDeal);
+                        }
+                        if (pendingFulfillCheck && order != null && oldCurrencyAmount != null &&
+                                oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
+                        {
+                            logger.info("order is not null, but nothing changed!");
+                            if (order.getOrderType() == OrderType.SELL)
+                            {
+                                decrementPendingSellAttempts();
+                            }
+                            pendingFulfillCheck = false;
                         }
                         shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                         longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
@@ -340,23 +352,15 @@ public class MaBot implements TradeBot {
                         order = null;
                         if (isTimeToBuy()) 
                         {
-                            BigDecimal oldCurrencyAmount = getFunds(currency);
+                            oldCurrencyAmount = getFunds(currency);
  			                order = buyCurrency(depth);
-                            if (order != null && oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
-                            {
-                                logger.info("buy order is not null, but nothing changed!");
-                                //decrementPendingBuyAttempts();
-                            }                            
+                            pendingFulfillCheck = true;
                         }
                         else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
                         {
-                            BigDecimal oldCurrencyAmount = getFunds(currency);
+                            oldCurrencyAmount = getFunds(currency);
  			                order = sellCurrency(depth); 
-                            if (order != null && oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
-                            {
-                                logger.info("sell order is not null, but nothing changed!");
-                                decrementPendingSellAttempts();
-                            }                            
+                            pendingFulfillCheck = true;
                         }
                         try
                         {
@@ -419,6 +423,7 @@ public class MaBot implements TradeBot {
 
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
+                pendingFulfillCheck = false;
             }
 
             private boolean isTakeProfit()
@@ -548,7 +553,15 @@ public class MaBot implements TradeBot {
                             return result;
                         }
                     }
-                }        
+                    else
+                    {
+                        logger.info("amount you want to buy is lower than minimum!");
+                    }
+                }   
+                else
+                {
+                    logger.info("amount market can sell at this price is lower than minimum!");
+                }
                 //decrementPendingBuyAttempts();
                 return null;
             }
@@ -594,7 +607,15 @@ public class MaBot implements TradeBot {
                             return result;
                         }
                     }
+                    else
+                    {
+                        logger.info("your funds to sell are lower than minimum!");
+                    }
 		        }
+                else
+                {
+                    logger.info("funds market can buy at this price are lower than minimum!");
+                }
                 decrementPendingSellAttempts();
                 return null;
             }
