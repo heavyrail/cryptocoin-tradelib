@@ -307,7 +307,7 @@ public class MaBot implements TradeBot {
             BigDecimal stopLossFactor;
             BigDecimal takeProfitFactor;
             BigDecimal oldCurrencyAmount = null;
-            boolean pendingFulfillCheck;
+            String pendingOrderId;
 
             /**
             * The main bot thread.
@@ -325,16 +325,23 @@ public class MaBot implements TradeBot {
                         {
                             _tradeSite.cancelOrder((SiteOrder) lastDeal);
                         }
-                        if (pendingFulfillCheck && order != null && oldCurrencyAmount != null &&
-                                oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
+                        if (pendingOrderId != null) 
                         {
-                            logger.info("order is not null, but nothing changed!");
-                            if (order.getOrderType() == OrderType.SELL)
+                            OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
+                            if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
+                                oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                             {
-                                decrementPendingSellAttempts();
+                                logger.info("order has been executed, but nothing changed!");
+                                if (order.getOrderType() == OrderType.SELL)
+                                {
+                                    decrementPendingSellAttempts();
+                                }
                             }
-                            pendingFulfillCheck = false;
-                        }
+                            else
+                            {
+                                pendingOrderId = null;
+                            }
+                        }                        
                         shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                         longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                         macd = shortEma.subtract(longEma);
@@ -354,13 +361,13 @@ public class MaBot implements TradeBot {
                         {
                             oldCurrencyAmount = getFunds(currency);
  			                order = buyCurrency(depth);
-                            pendingFulfillCheck = true;
+                            pendingOrderId = order.getId();
                         }
                         else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
                         {
                             oldCurrencyAmount = getFunds(currency);
  			                order = sellCurrency(depth); 
-                            pendingFulfillCheck = true;
+                            pendingOrderId = order.getId();
                         }
                         try
                         {
@@ -382,11 +389,6 @@ public class MaBot implements TradeBot {
 		        }
 		    }
 
-            /*private void decrementPendingBuyAttempts()
-            {
-                pendingBuyAttempts = pendingBuyAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingBuyAttempts - 1;
-            }*/
-
             private void decrementPendingSellAttempts()
             {
                 pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
@@ -394,7 +396,6 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
-                //pendingBuyAttempts = 0;
                 pendingSellAttempts = 0;
                 BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
                 BigDecimal numberOne = new BigDecimal("1"); 
@@ -423,7 +424,7 @@ public class MaBot implements TradeBot {
 
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
-                pendingFulfillCheck = false;
+                pendingOrderId = null;
             }
 
             private boolean isTakeProfit()
@@ -506,7 +507,6 @@ public class MaBot implements TradeBot {
                 boolean result = isTrendUp();
                 if (result)
                 {
-                    //logger.info(String.format("*** Time To Buy [%d] ***", pendingBuyAttempts));
                     logger.info("*** Time To Buy ***");
                 }
                 return result;

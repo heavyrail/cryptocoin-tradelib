@@ -433,11 +433,10 @@ public abstract class OrderBook {
 
 		if( tradeSite != null) {
 
-            LogUtils.getInstance().getLogger().info("Before execution: " + orderToExecute.getStatus()); //TODO remove order status in production
 		    OrderStatus newStatus = tradeSite.executeOrder( siteOrderToExecute); // If the order could be executed,
 
 		    // Log the executed order. TODO remove order status in production
-		    LogUtils.getInstance().getLogger().info( "Executed order " + siteOrderToExecute.toString() + "; " + newStatus);
+		    LogUtils.getInstance().getLogger().info( "Executed order " + siteOrderToExecute.toString()/+ "; result is " + newStatus);
 
 		    // Check, if the trade site set the site id, so we can check the order status later.
 		    if( siteOrderToExecute.getSiteId() == null) {
