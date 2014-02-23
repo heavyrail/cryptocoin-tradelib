@@ -303,6 +303,7 @@ public class MaBot implements TradeBot {
             Order order;
             Order lastDeal;
             ChartAnalyzer analyzer = null;
+            Depth depth;
             BigDecimal sellFactor;
             BigDecimal stopLossFactor;
             BigDecimal takeProfitFactor;
@@ -318,65 +319,11 @@ public class MaBot implements TradeBot {
                 while( _updateThread == this) 
                 { 
                     long t1 = System.currentTimeMillis();
-                    lastMacd = macd;
                     try
                     {
-                        if (lastDeal != null && lastDeal.getStatus() == OrderStatus.PARTIALLY_FILLED)
-                        {
-                            _tradeSite.cancelOrder((SiteOrder) lastDeal);
-                        }
-                        if (pendingOrderId != null) 
-                        {
-                            OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
-                            if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
-                                oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
-                            {
-                                logger.info("order has been executed, but nothing changed!");
-                                if (order.getOrderType() == OrderType.SELL)
-                                {
-                                    decrementPendingSellAttempts();
-                                }
-                            }
-                            else
-                            {
-                                pendingOrderId = null;
-                            }
-                        }                        
-                        shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
-                        longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
-                        macd = shortEma.subtract(longEma);
-                        deltaMacd = macd.subtract(lastMacd);
-  	    	            Depth depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
-                        buyPrice = depth.getBuy(0).getPrice();
-                        sellPrice = depth.getSell(0).getPrice();
-                        boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
-                        downsideUp = !shortEmaAbove && newShortEmaAbove;
-                        upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
-                        shortEmaAbove = newShortEmaAbove;
-                        macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
-                        macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
-
-                        order = null;
-                        if (isTimeToBuy()) 
-                        {
-                            oldCurrencyAmount = getFunds(currency);
- 			                order = buyCurrency(depth);
-                            pendingOrderId = order.getId();
-                        }
-                        else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
-                        {
-                            oldCurrencyAmount = getFunds(currency);
- 			                order = sellCurrency(depth); 
-                            pendingOrderId = order.getId();
-                        }
-                        try
-                        {
-                            reportCycleSummary();
-                        }
-                        catch (Exception e)
-                        {
-                            logger.error(e);
-                        }
+                        checkOldOrders();
+                        calculateSignals();
+                        doTrade();
                     }
                     catch (Exception e)
                     {
@@ -415,6 +362,7 @@ public class MaBot implements TradeBot {
                     shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                     longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                     macd = shortEma.subtract(longEma);
+                    lastMacd = macd;
                 }
                 catch (Exception e)
                 {
@@ -425,6 +373,80 @@ public class MaBot implements TradeBot {
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
                 pendingOrderId = null;
+            }
+
+            private void checkOldOrders()
+            {
+                if (lastDeal != null && lastDeal.getStatus() == OrderStatus.PARTIALLY_FILLED)
+                {
+                    _tradeSite.cancelOrder((SiteOrder) lastDeal);
+                }
+                if (pendingOrderId != null) 
+                {
+                    OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
+                    if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
+                        oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
+                    {
+                        logger.info("order has been executed, but nothing changed!");
+                        if (order.getOrderType() == OrderType.SELL)
+                        {
+                            decrementPendingSellAttempts();
+                        }
+                    }
+                    else
+                    {
+                        pendingOrderId = null;
+                    }
+                }                        
+            }
+
+            private void calculateSignals()
+            {
+                shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                macd = shortEma.subtract(longEma);
+                deltaMacd = macd.subtract(lastMacd);
+  	            depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
+                buyPrice = depth.getBuy(0).getPrice();
+                sellPrice = depth.getSell(0).getPrice();
+                boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
+                downsideUp = !shortEmaAbove && newShortEmaAbove;
+                upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
+                shortEmaAbove = newShortEmaAbove;
+                macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
+                macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
+                lastMacd = macd;
+            }
+
+            private void doTrade()
+            {
+                order = null;
+                if (isTimeToBuy()) 
+                {
+                    oldCurrencyAmount = getFunds(currency);
+ 			        order = buyCurrency(depth);
+                    if (order != null)
+                    {
+                        pendingOrderId = order.getId();
+                    }
+                }
+                else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
+                {
+                    oldCurrencyAmount = getFunds(currency);
+	                order = sellCurrency(depth); 
+                    if (order != null)
+                    {
+                        pendingOrderId = order.getId();
+                    }
+                }
+                try
+                {
+                    reportCycleSummary();
+                }
+                catch (Exception e)
+                {
+                    logger.error(e);
+                }
             }
 
             private boolean isTakeProfit()
