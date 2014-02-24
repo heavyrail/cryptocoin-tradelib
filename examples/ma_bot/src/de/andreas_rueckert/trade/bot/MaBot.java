@@ -377,20 +377,35 @@ public class MaBot implements TradeBot {
 
             private void checkOldOrders()
             {
-                if (lastDeal != null && lastDeal.getStatus() == OrderStatus.PARTIALLY_FILLED)
-                {
-                    _tradeSite.cancelOrder((SiteOrder) lastDeal);
-                }
                 if (pendingOrderId != null) 
                 {
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
-                    if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
+                    if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
+                    {
+                        logger.info("cancelling partially filled order");
+                        orderBook.cancelOrder(pendingOrderId);
+                        if (order.getOrderType() == OrderType.SELL)
+                        {
+                            decrementPendingSellAttempts();
+                            logger.info("will try to sell again next time");
+                        }
+                        else
+                        {
+                            logger.info("will try to buy again next time");
+                        }
+                    }
+                    else if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
                         oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                     {
                         logger.info("order has been executed, but nothing changed!");
                         if (order.getOrderType() == OrderType.SELL)
                         {
                             decrementPendingSellAttempts();
+                            logger.info("will try to sell again next time");
+                        }
+                        else
+                        {
+                            logger.info("will try to buy again next time");
                         }
                     }
                     else
@@ -399,6 +414,7 @@ public class MaBot implements TradeBot {
                     }
                 }                        
             }
+
 
             private void calculateSignals()
             {
