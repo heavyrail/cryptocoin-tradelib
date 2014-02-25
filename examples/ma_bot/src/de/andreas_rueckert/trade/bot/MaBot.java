@@ -52,6 +52,7 @@ import de.andreas_rueckert.util.ModuleLoader;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Map;
 import java.util.Scanner;
 import java.io.IOException;
@@ -172,7 +173,6 @@ public class MaBot implements TradeBot {
         System.exit(-1);
     }
     _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
-    //_traideSite = new BtcEClient();
     _tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BTCe");
     
     PersistentPropertyList settings = new PersistentPropertyList();
@@ -344,7 +344,15 @@ public class MaBot implements TradeBot {
             private void initTrade()
             {
                 pendingSellAttempts = 0;
-                BigDecimal fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                BigDecimal fee;
+                if (_tradeSite instanceof BtcEClient)
+                {
+                    fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                }
+                else
+                {
+                    fee = _tradeSite.getFeeForTrade();
+                }
                 BigDecimal numberOne = new BigDecimal("1"); 
                 BigDecimal doubleFee = fee.add(fee);
                 BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
@@ -379,12 +387,13 @@ public class MaBot implements TradeBot {
             {
                 if (pendingOrderId != null) 
                 {
+                    Order pendingOrder = orderBook.getOrder(pendingOrderId);
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
                     if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
                     {
                         logger.info("cancelling partially filled order");
-                        orderBook.cancelOrder(pendingOrderId);
-                        if (order.getOrderType() == OrderType.SELL)
+                        orderBook.cancelOrder(pendingOrder);
+                        if (pendingOrder.getOrderType() == OrderType.SELL)
                         {
                             decrementPendingSellAttempts();
                             logger.info("will try to sell again next time");
@@ -398,7 +407,7 @@ public class MaBot implements TradeBot {
                         oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                     {
                         logger.info("order has been executed, but nothing changed!");
-                        if (order.getOrderType() == OrderType.SELL)
+                        if (pendingOrder.getOrderType() == OrderType.SELL)
                         {
                             decrementPendingSellAttempts();
                             logger.info("will try to sell again next time");
@@ -674,6 +683,7 @@ public class MaBot implements TradeBot {
                 {
                     logger.info(String.format("last deal         | %s", lastDeal));
                     logger.info(String.format("      +-status    | %s", lastDeal.getStatus()));
+                    logger.info(String.format("      +-timestamp | %s", new Date(lastDeal.getTimestamp())));
                 }
                 else
                 {
