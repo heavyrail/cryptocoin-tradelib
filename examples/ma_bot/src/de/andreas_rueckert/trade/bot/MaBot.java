@@ -392,7 +392,10 @@ public class MaBot implements TradeBot {
                     if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
                     {
                         logger.info("cancelling partially filled order");
-                        orderBook.cancelOrder(pendingOrder);
+                        if (orderBook.cancelOrder(pendingOrder))
+                        {
+                            pendingOrderId = null;
+                        }
                         if (pendingOrder.getOrderType() == OrderType.SELL)
                         {
                             decrementPendingSellAttempts();
