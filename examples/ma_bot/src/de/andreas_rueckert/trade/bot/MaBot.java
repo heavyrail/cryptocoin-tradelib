@@ -540,10 +540,10 @@ public class MaBot implements TradeBot {
                     if (lastPrice == null || needToRetry)
                     {
                         logger.info(String.format("*** Time To Sell [%d] ***", pendingSellAttempts));
-                        if (needToRetry)
+                        /*if (needToRetry)
                         {
-                            pendingSellAttempts--;
-                        }
+                            decrementPendingSellAttempts();
+                        }*/
                         return true;
                     }
                 }
@@ -609,7 +609,6 @@ public class MaBot implements TradeBot {
                 {
                     logger.info("amount market can sell at this price is lower than minimum!");
                 }
-                //decrementPendingBuyAttempts();
                 return null;
             }
 
@@ -656,6 +655,7 @@ public class MaBot implements TradeBot {
                     else
                     {
                         logger.info("your funds to sell are lower than minimum!");
+                        pendingSellAttempts = 0;
                     }
 		        }
                 else
@@ -682,7 +682,7 @@ public class MaBot implements TradeBot {
                 {
                     logger.info(String.format("last deal         | %s", lastDeal));
                     logger.info(String.format("      +-status    | %s", lastDeal.getStatus()));
-                    logger.info(String.format("      +-timestamp | %s", new Date(lastDeal.getTimestamp())));
+                    logger.info(String.format("      +-timestamp | %s", new Date(lastDeal.getTimestamp() / 1000)));
                 }
                 else
                 {
