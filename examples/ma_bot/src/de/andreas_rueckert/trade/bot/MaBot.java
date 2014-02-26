@@ -140,13 +140,9 @@ public class MaBot implements TradeBot {
 
     private CryptoCoinOrderBook orderBook;
 
-    private Price lastPrice = null;
+    private Price lastPrice;
 
-    private BigDecimal targetBuyPrice = null;
-
-    //private BigDecimal oldTargetBuyPrice = null;
-
-    //private int pendingBuyAttempts;
+    private BigDecimal targetBuyPrice;
 
     private int pendingSellAttempts;
     
@@ -380,7 +376,9 @@ public class MaBot implements TradeBot {
 
                 shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 lastDeal = null;
+                lastPrice = null;
                 pendingOrderId = null;
+                targetBuyPrice = null;
             }
 
             private void checkOldOrders()
@@ -599,7 +597,6 @@ public class MaBot implements TradeBot {
                         {
                             lastPrice = sellPrice;
                             targetBuyPrice = sellPrice.multiply(sellFactor);
-                            //pendingBuyAttempts = 0;
                             return result;
                         }
                     }
@@ -652,7 +649,6 @@ public class MaBot implements TradeBot {
                         if (result != null && result.getStatus() != OrderStatus.ERROR);
                         {
                             lastPrice = buyPrice;
-                            targetBuyPrice = null;
                             pendingSellAttempts = 0;
                             return result;
                         }
