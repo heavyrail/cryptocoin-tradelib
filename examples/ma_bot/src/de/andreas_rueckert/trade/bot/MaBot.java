@@ -340,45 +340,41 @@ public class MaBot implements TradeBot {
             private void initTrade()
             {
                 pendingSellAttempts = 0;
-                BigDecimal fee;
-                if (_tradeSite instanceof BtcEClient)
-                {
-                    fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
-                }
-                else
-                {
-                    fee = _tradeSite.getFeeForTrade();
-                }
                 BigDecimal numberOne = new BigDecimal("1"); 
-                BigDecimal doubleFee = fee.add(fee);
-                BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
-                BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
-                BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
-		        sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
-                takeProfitFactor = numberOne.add(PROFIT_TO_TAKE);
                 stopLossFactor = numberOne.subtract(LOSS_TO_STOP);
-                logger.info("fee = " + fee);
-                logger.info("sf  = " + sellFactor);
-
+                lastDeal = null;
                 try
                 {
+                    BigDecimal fee;
+                    if (_tradeSite instanceof BtcEClient)
+                    {
+                        fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                    }
+                    else
+                    {
+                        fee = _tradeSite.getFeeForTrade();
+                    }
+                    BigDecimal doubleFee = fee.add(fee);
+                    BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
+                    BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
+                    BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
+		            sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                    logger.info("        fee = " + fee);
+                    logger.info("sell factor = " + sellFactor);
                     analyzer = ChartAnalyzer.getInstance(); 
                     shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                     longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                     macd = shortEma.subtract(longEma);
                     lastMacd = macd;
+                    lastPrice = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair).getBuy(0).getPrice();
+                    targetBuyPrice = lastPrice.multiply(sellFactor);
+                    shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 }
                 catch (Exception e)
                 {
                     logger.error(e);
                     System.exit(-1);
                 }
-
-                shortEmaAbove = shortEma.compareTo(longEma) > 0;
-                lastDeal = null;
-                lastPrice = null;
-                pendingOrderId = null;
-                targetBuyPrice = null;
             }
 
             private void checkOldOrders()
@@ -435,6 +431,14 @@ public class MaBot implements TradeBot {
   	            depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
                 buyPrice = depth.getBuy(0).getPrice();
                 sellPrice = depth.getSell(0).getPrice();
+                
+                /* should a buy price rise too high, move target buy price up too */
+                BigDecimal nextTargetBuyPrice = targetBuyPrice.multiply(sellFactor);
+                if (buyPrice.compareTo(nextTargetBuyPrice) > 0)
+                {
+                    targetBuyPrice = nextTargetBuyPrice;
+                }
+
                 boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
                 downsideUp = !shortEmaAbove && newShortEmaAbove;
                 upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
@@ -456,7 +460,7 @@ public class MaBot implements TradeBot {
                         pendingOrderId = order.getId();
                     }
                 }
-                else if (isTimeToSell() || isStopLoss() || isTakeProfit() || isMinProfit()) 
+                else if (isTimeToSell() || isStopLoss() || isMinProfit()) 
                 {
                     oldCurrencyAmount = getFunds(currency);
 	                order = sellCurrency(depth); 
@@ -475,7 +479,7 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private boolean isTakeProfit()
+            /*private boolean isTakeProfit()
             {
                 if (lastPrice == null)
                 {
@@ -487,14 +491,10 @@ public class MaBot implements TradeBot {
                     logger.info("*** Take Profit ***");
                 }
                 return result;
-            }
+            }*/
 
             private boolean isStopLoss()
             {
-                if (lastPrice == null)
-                {
-                    return false;
-                }
                 boolean result = buyPrice.compareTo(lastPrice.multiply(stopLossFactor)) < 0 && macd.signum() < 0;
                 if (result)
                 {
@@ -506,7 +506,7 @@ public class MaBot implements TradeBot {
             private boolean isMinProfit()
             {
                 boolean result = false;
-                if (lastPrice != null && targetBuyPrice != null)
+                if (targetBuyPrice != null)
                 {
                     boolean sellProfitable = buyPrice.compareTo(targetBuyPrice) > 0;
                     if (sellProfitable && isTrendDown())
@@ -537,13 +537,9 @@ public class MaBot implements TradeBot {
                 {
                     // we would retry sell order only if trend is still down
                     boolean needToRetry = pendingSellAttempts > 0;
-                    if (lastPrice == null || needToRetry)
+                    if (needToRetry)
                     {
                         logger.info(String.format("*** Time To Sell [%d] ***", pendingSellAttempts));
-                        /*if (needToRetry)
-                        {
-                            decrementPendingSellAttempts();
-                        }*/
                         return true;
                     }
                 }
