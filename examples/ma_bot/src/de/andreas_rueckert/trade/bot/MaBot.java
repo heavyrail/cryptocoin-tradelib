@@ -76,7 +76,7 @@ public class MaBot implements TradeBot {
      */
     private final static BigDecimal MIN_PROFIT = new BigDecimal("0.001");
 
-    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.05");
+    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.08");
 
     private final static BigDecimal PROFIT_TO_TAKE = new BigDecimal("0.25");
 
@@ -144,7 +144,7 @@ public class MaBot implements TradeBot {
 
     private BigDecimal targetBuyPrice;
 
-    private int pendingSellAttempts;
+    //private int pendingSellAttempts;
     
     // Constructors
 
@@ -332,14 +332,14 @@ public class MaBot implements TradeBot {
 		        }
 		    }
 
-            private void decrementPendingSellAttempts()
+            /*private void decrementPendingSellAttempts()
             {
                 pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
-            }
+            }*/
 
             private void initTrade()
             {
-                pendingSellAttempts = 0;
+                //pendingSellAttempts = 0;
                 BigDecimal numberOne = new BigDecimal("1"); 
                 stopLossFactor = numberOne.subtract(LOSS_TO_STOP);
                 lastDeal = null;
@@ -390,21 +390,21 @@ public class MaBot implements TradeBot {
                         {
                             pendingOrderId = null;
                         }
-                        if (pendingOrder.getOrderType() == OrderType.SELL)
+                        /*if (pendingOrder.getOrderType() == OrderType.SELL)
                         {
-                            decrementPendingSellAttempts();
+                            //decrementPendingSellAttempts();
                             logger.info("will try to sell again next time");
                         }
                         else
                         {
                             logger.info("will try to buy again next time");
-                        }
+                        }*/
                     }
                     else if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
                         oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
                     {
                         logger.info("order has been executed, but nothing changed!");
-                        if (pendingOrder.getOrderType() == OrderType.SELL)
+                        /*if (pendingOrder.getOrderType() == OrderType.SELL)
                         {
                             decrementPendingSellAttempts();
                             logger.info("will try to sell again next time");
@@ -412,7 +412,7 @@ public class MaBot implements TradeBot {
                         else
                         {
                             logger.info("will try to buy again next time");
-                        }
+                        }*/
                     }
                     else
                     {
@@ -460,7 +460,7 @@ public class MaBot implements TradeBot {
                         pendingOrderId = order.getId();
                     }
                 }
-                else if (isTimeToSell() || isStopLoss() || isMinProfit()) 
+                else if (/*isTimeToSell() || */isStopLoss() || isMinProfit()) 
                 {
                     oldCurrencyAmount = getFunds(currency);
 	                order = sellCurrency(depth); 
@@ -506,19 +506,15 @@ public class MaBot implements TradeBot {
             private boolean isMinProfit()
             {
                 boolean result = false;
-                if (targetBuyPrice != null)
-                {
-                    boolean sellProfitable = buyPrice.compareTo(targetBuyPrice) > 0;
-                    if (sellProfitable && isTrendDown())
-                    {
-                        result = true;
-                    }
-                }
-                if (result)
+                if (targetBuyPrice != null && buyPrice.compareTo(targetBuyPrice) > 0 && isTrendDown())
                 {
                     logger.info("*** Minimal Profit ***");
+                    return true;
                 }
-                return result;
+                else
+                {
+                    return false;
+                }
             }
 
             private boolean isTrendDown()
@@ -531,7 +527,7 @@ public class MaBot implements TradeBot {
                 return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
             }
             
-            private boolean isTimeToSell()
+            /*private boolean isTimeToSell()
             {
                 if (isTrendDown())
                 {
@@ -544,7 +540,7 @@ public class MaBot implements TradeBot {
                     }
                 }
                 return false;
-            }
+            }*/
             
             private boolean isTimeToBuy()
             {
@@ -644,21 +640,21 @@ public class MaBot implements TradeBot {
                         if (result != null && result.getStatus() != OrderStatus.ERROR);
                         {
                             lastPrice = buyPrice;
-                            pendingSellAttempts = 0;
+                            //pendingSellAttempts = 0;
                             return result;
                         }
                     }
                     else
                     {
                         logger.info("your funds to sell are lower than minimum!");
-                        pendingSellAttempts = 0;
+                        //pendingSellAttempts = 0;
                     }
 		        }
                 else
                 {
                     logger.info("funds market can buy at this price are lower than minimum!");
                 }
-                decrementPendingSellAttempts();
+                //decrementPendingSellAttempts();
                 return null;
             }
 
