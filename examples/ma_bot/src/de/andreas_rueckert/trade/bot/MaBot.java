@@ -144,6 +144,8 @@ public class MaBot implements TradeBot {
 
     private BigDecimal targetBuyPrice;
 
+    private BigDecimal stopLossPrice;
+
     //private int pendingSellAttempts;
     
     // Constructors
@@ -366,8 +368,9 @@ public class MaBot implements TradeBot {
                     longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                     macd = shortEma.subtract(longEma);
                     lastMacd = macd;
-                    lastPrice = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair).getBuy(0).getPrice();
+                    lastPrice = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair).getSell(0).getPrice();
                     targetBuyPrice = lastPrice.multiply(sellFactor);
+                    stopLossPrice = lastPrice.multiply(stopLossFactor);
                     shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 }
                 catch (Exception e)
@@ -495,12 +498,15 @@ public class MaBot implements TradeBot {
 
             private boolean isStopLoss()
             {
-                boolean result = buyPrice.compareTo(lastPrice.multiply(stopLossFactor)) < 0 && macd.signum() < 0;
-                if (result)
+                if (buyPrice.compareTo(stopLossPrice) < 0 && macd.signum() < 0)
                 {
                     logger.info("*** Stop Loss ***");
+                    return true;
                 }
-                return result;
+                else
+                {
+                    return false;
+                }
             }
 
             private boolean isMinProfit()
@@ -588,6 +594,7 @@ public class MaBot implements TradeBot {
                         if (result != null && result.getStatus() != OrderStatus.ERROR);
                         {
                             lastPrice = sellPrice;
+                            stopLossPrice = sellPrice.multiply(stopLossFactor);
                             targetBuyPrice = sellPrice.multiply(sellFactor);
                             return result;
                         }
@@ -660,10 +667,10 @@ public class MaBot implements TradeBot {
 
             private void reportCycleSummary()
             {
-                logger.info(String.format("trend             |                                   [ %s ]       |", shortEmaAbove ? "+" : "-"));
+                logger.info(String.format("trend            |                                    [ %s ]       |", shortEmaAbove ? "+" : "-"));
                 if (order != null)
                 {
-                    logger.info(String.format("current deal      | %s", order));
+                    logger.info(String.format("current deal     | %s", order));
                     lastDeal = order;
                 }
                 else
@@ -672,9 +679,9 @@ public class MaBot implements TradeBot {
                 }
                 if (lastDeal != null)
                 {
-                    logger.info(String.format("last deal         | %s", lastDeal));
-                    logger.info(String.format("      +-status    | %s", lastDeal.getStatus()));
-                    logger.info(String.format("      +-timestamp | %s", new Date(lastDeal.getTimestamp() / 1000)));
+                    logger.info(String.format("last deal        | %s", lastDeal));
+                    logger.info(String.format("     +-status    | %s", lastDeal.getStatus()));
+                    logger.info(String.format("     +-timestamp | %s", new Date(lastDeal.getTimestamp() / 1000)));
                 }
                 else
                 {
@@ -682,23 +689,23 @@ public class MaBot implements TradeBot {
                 }
                 String priceTrend = macd.signum() > 0 ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
-                logger.info(String.format("%3s               |                 %12s                  |", currency, getFunds(currency).toPlainString()));
-                logger.info(String.format("%3s               |                 %12s                  |", payCurrency, getFunds(payCurrency).toPlainString()));
+                logger.info(String.format("%3s              |                  %12s                  |", currency, getFunds(currency).toPlainString()));
+                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, getFunds(payCurrency).toPlainString()));
                 if (targetBuyPrice != null)
                 {
-                    logger.info(String.format("buy               |                 %12f [ %12f ] |", buyPrice, targetBuyPrice));
+                    logger.info(String.format("buy              | [ %12f ] %12f [ %12f ] |", stopLossPrice, buyPrice, targetBuyPrice));
                 }
                 else
                 {
-                    logger.info(String.format("buy               |                 %12f                  |", buyPrice));
+                    logger.info(String.format("buy              |                  %12f                  |", buyPrice));
                 }
-                logger.info(String.format("sell              |                 %12f                  |", sellPrice));
-                logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_SHORT_INTERVAL, shortEma));
-                logger.info(String.format("ema-%3s           |                 %12f                  |", EMA_LONG_INTERVAL, longEma));
-                logger.info(String.format("macd              |                 %12f      [ %s ]       |", macd, priceTrend));
-                logger.info(String.format("  +-prev          |                 %12f                  |", lastMacd));
-                logger.info(String.format("  +-delta         |                 %12f      [ %s ]       |", deltaMacd, macdTrend));
-                logger.info(              "------------------+-----------------------------------------------+");
+                logger.info(String.format("sell             |                  %12f                  |", sellPrice));
+                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_SHORT_INTERVAL, shortEma));
+                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_LONG_INTERVAL, longEma));
+                logger.info(String.format("macd             |                  %12f      [ %s ]       |", macd, priceTrend));
+                logger.info(String.format("  +-prev         |                  %12f                  |", lastMacd));
+                logger.info(String.format("  +-delta        |                  %12f      [ %s ]       |", deltaMacd, macdTrend));
+                logger.info(              "-----------------+------------------------------------------------+");
             }
 
             private void sleepUntilNextCycle(long t1)
