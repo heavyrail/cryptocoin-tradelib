@@ -153,6 +153,8 @@ public class MaBot implements TradeBot {
 
     private String initialAssetsString;
 
+    private BigDecimal initialSellPrice;
+
     private int cycleNum;
 
     // Constructors
@@ -374,6 +376,7 @@ public class MaBot implements TradeBot {
                     lastMacd = macd;
                     depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair); 
                     lastPrice = depth.getSell(0).getPrice();
+                    initialSellPrice = lastPrice.multiply(BigDecimal.ONE.add(fee));
                     targetBuyPrice = lastPrice.multiply(sellFactor, MathContext.DECIMAL128);
                     stopLossPrice = lastPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
                     BigDecimal currencyValue = getFunds(currency);                                                                                                            
@@ -704,17 +707,25 @@ public class MaBot implements TradeBot {
                 }
                 String priceTrend = macd.signum() > 0 ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
+                BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
                 BigDecimal currencyValue = getFunds(currency);
                 BigDecimal payCurrencyValue = getFunds(payCurrency);
                 BigDecimal currentAssets = buyPrice.multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));
                 BigDecimal profit = currentAssets.subtract(initialAssets);
                 BigDecimal profitPercent = profit.divide(initialAssets, MathContext.DECIMAL128);
-                BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
                 BigDecimal profitPercentPerDay = profitPercent.divide(uptimeDays, MathContext.DECIMAL128);
                 BigDecimal profitPercentPerMonth = profitPercentPerDay.multiply(new BigDecimal(30));
                 BigDecimal profitPercentPerYear = profitPercentPerDay.multiply(new BigDecimal(365));
+                
+                // reference profit (refProfit) is a virtual profit of sole investing in currency, without trading
+                // it is here for one to be able to compare bot work versus just leave currency intact
+                BigDecimal refProfit = buyPrice.multiply(BigDecimal.ONE.add(fee)).subtract(initialSellPrice);
+                BigDecimal refProfitPercent = refProfit.divide(initialSellPrice, MathContext.DECIMAL128);
+                BigDecimal refProfitPercentPerDay = refProfitPercent.divide(uptimeDays, MathContext.DECIMAL128);
+                BigDecimal refProfitPercentPerMonth = refProfitPercentPerDay.multiply(new BigDecimal(30));
+                BigDecimal refProfitPercentPerYear = refProfitPercentPerDay.multiply(new BigDecimal(365));
 
-                logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(4, RoundingMode.CEILING)));
+                logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(3, RoundingMode.CEILING)));
                 logger.info(String.format("initial ( %4s ) |                  %12s                  |", payCurrency, initialAssetsString));
                 logger.info(String.format("current ( %4s ) |                  %12s                  |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
                 logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, profit.setScale(8, RoundingMode.CEILING)));
@@ -722,6 +733,10 @@ public class MaBot implements TradeBot {
                 logger.info(String.format("        +-day    |                  %12s                  |", profitPercentPerDay.setScale(3, RoundingMode.CEILING)));
                 logger.info(String.format("        +-month  |                  %12s                  |", profitPercentPerMonth.setScale(2, RoundingMode.CEILING)));
                 logger.info(String.format("        +-year   |                  %12s                  |", profitPercentPerYear.setScale(1, RoundingMode.CEILING)));
+                logger.info(String.format("ref. profit (%%)  |                  %12s                  |", refProfitPercent.setScale(4, RoundingMode.CEILING)));
+                logger.info(String.format("        +-day    |                  %12s                  |", refProfitPercentPerDay.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("        +-month  |                  %12s                  |", refProfitPercentPerMonth.setScale(2, RoundingMode.CEILING)));
+                logger.info(String.format("        +-year   |                  %12s                  |", refProfitPercentPerYear.setScale(1, RoundingMode.CEILING)));
 
                 logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.setScale(6, RoundingMode.CEILING)));
                 logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.setScale(6, RoundingMode.CEILING)));
