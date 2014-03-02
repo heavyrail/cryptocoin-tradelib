@@ -381,7 +381,7 @@ public class MaBot implements TradeBot {
                     stopLossPrice = lastPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
                     BigDecimal currencyValue = getFunds(currency);                                                                                                            
                     BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
-                    initialAssets = depth.getBuy(0).getPrice().multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));                                 
+                    initialAssets = initialSellPrice.multiply(currencyValue).add(payCurrencyValue);                                 
                     initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING).toPlainString();
                     cycleNum = 1;
                     shortEmaAbove = shortEma.compareTo(longEma) > 0;
@@ -710,7 +710,8 @@ public class MaBot implements TradeBot {
                 BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
                 BigDecimal currencyValue = getFunds(currency);
                 BigDecimal payCurrencyValue = getFunds(payCurrency);
-                BigDecimal currentAssets = buyPrice.multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));
+                BigDecimal buyPriceLessFee = buyPrice.multiply(BigDecimal.ONE.subtract(fee));
+                BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
                 BigDecimal profit = currentAssets.subtract(initialAssets);
                 BigDecimal profitPercent = profit.divide(initialAssets, MathContext.DECIMAL128);
                 BigDecimal profitPercentPerDay = profitPercent.divide(uptimeDays, MathContext.DECIMAL128);
@@ -719,7 +720,7 @@ public class MaBot implements TradeBot {
                 
                 // reference profit (refProfit) is a virtual profit of sole investing in currency, without trading
                 // it is here for one to be able to compare bot work versus just leave currency intact
-                BigDecimal refProfit = buyPrice.multiply(BigDecimal.ONE.add(fee)).subtract(initialSellPrice);
+                BigDecimal refProfit = buyPriceLessFee.subtract(initialSellPrice);
                 BigDecimal refProfitPercent = refProfit.divide(initialSellPrice, MathContext.DECIMAL128);
                 BigDecimal refProfitPercentPerDay = refProfitPercent.divide(uptimeDays, MathContext.DECIMAL128);
                 BigDecimal refProfitPercentPerMonth = refProfitPercentPerDay.multiply(new BigDecimal(30));
