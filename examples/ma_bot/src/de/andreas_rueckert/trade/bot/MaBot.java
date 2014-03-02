@@ -451,13 +451,11 @@ public class MaBot implements TradeBot {
                 buyPrice = depth.getBuy(0).getPrice();
                 sellPrice = depth.getSell(0).getPrice();
                 
-                /* should a buy price rise too high, move target buy price up too */
-                BigDecimal nextTargetBuyPrice = targetBuyPrice.multiply(sellFactor, MathContext.DECIMAL128);
-                if (buyPrice.compareTo(nextTargetBuyPrice) > 0)
+                /* should a short EMA rise too high, move stop loss up too */
+                if (shortEma.compareTo(targetBuyPrice) > 0)
                 {
-                    targetBuyPrice = nextTargetBuyPrice;
-                    stopLossPrice = stopLossPrice.multiply(sellFactor, MathContext.DECIMAL128);
-                    logger.info("*** Thresholds Moved Up ***");
+                    stopLossPrice = sellPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
+                    logger.info("*** Stop Loss Moved Up ***");
                 }
 
                 boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
