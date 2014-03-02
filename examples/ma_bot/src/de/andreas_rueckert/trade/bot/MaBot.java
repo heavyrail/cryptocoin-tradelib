@@ -379,7 +379,7 @@ public class MaBot implements TradeBot {
                     BigDecimal currencyValue = getFunds(currency);                                                                                                            
                     BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
                     initialAssets = depth.getBuy(0).getPrice().multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));                                 
-                    initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING);
+                    initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING).toPlainString();
                     cycleNum = 1;
                     shortEmaAbove = shortEma.compareTo(longEma) > 0;
                     logger.info("           fee = " + fee);
