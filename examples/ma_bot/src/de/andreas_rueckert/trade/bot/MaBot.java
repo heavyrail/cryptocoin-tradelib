@@ -74,7 +74,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.001");
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00098402");
 
     private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.08");
 
@@ -108,7 +108,7 @@ public class MaBot implements TradeBot {
     private final static String MACD_SMA_INTERVAL = "9m";
 
     /* Maximum number of attempts to retry an order failed due to insufficient funds/depth */
-    private final static int MAX_PENDING_ATTEMPTS = 5;
+    //private final static int MAX_PENDING_ATTEMPTS = 5;
 
     // Instance variables
 
@@ -146,8 +146,14 @@ public class MaBot implements TradeBot {
 
     private BigDecimal stopLossPrice;
 
-    //private int pendingSellAttempts;
-    
+    private BigDecimal fee;
+
+    private BigDecimal initialAssets;
+
+    private String initialAssetsString;
+
+    private int cycleNum;
+
     // Constructors
 
     /**
@@ -322,6 +328,7 @@ public class MaBot implements TradeBot {
                         checkOldOrders();
                         calculateSignals();
                         doTrade();
+                        cycleNum++;
                     }
                     catch (Exception e)
                     {
@@ -341,13 +348,11 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
-                //pendingSellAttempts = 0;
-                BigDecimal numberOne = new BigDecimal("1"); 
-                stopLossFactor = numberOne.subtract(LOSS_TO_STOP);
+                //BigDecimal numberOne = new BigDecimal("1"); 
+                stopLossFactor = BigDecimal.ONE.subtract(LOSS_TO_STOP);
                 lastDeal = null;
                 try
                 {
-                    BigDecimal fee;
                     if (_tradeSite instanceof BtcEClient)
                     {
                         fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
@@ -358,8 +363,8 @@ public class MaBot implements TradeBot {
                     }
                     BigDecimal doubleFee = fee.add(fee);
                     BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
-                    BigDecimal priceCoeff = numberOne.subtract(doubleFee).add(feeSquared);
-                    BigDecimal profitCoeff = numberOne.add(MIN_PROFIT);
+                    BigDecimal priceCoeff = BigDecimal.ONE.subtract(doubleFee).add(feeSquared);
+                    BigDecimal profitCoeff = BigDecimal.ONE.add(MIN_PROFIT);
 		            sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
                     logger.info("        fee = " + fee);
                     logger.info("sell factor = " + sellFactor);
@@ -369,8 +374,13 @@ public class MaBot implements TradeBot {
                     macd = shortEma.subtract(longEma);
                     lastMacd = macd;
                     lastPrice = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair).getSell(0).getPrice();
-                    targetBuyPrice = lastPrice.multiply(sellFactor);
-                    stopLossPrice = lastPrice.multiply(stopLossFactor);
+                    targetBuyPrice = lastPrice.multiply(sellFactor, MathContext.DECIMAL128);
+                    stopLossPrice = lastPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
+                    BigDecimal currencyValue = getFunds(currency);                                                                                                            
+                    BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
+                    initialAssets = buyPrice.multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));                                 
+                    initialAssetsString = initialAssets.toPlainString();
+                    cycleNum = 1;
                     shortEmaAbove = shortEma.compareTo(longEma) > 0;
                 }
                 catch (Exception e)
@@ -436,10 +446,12 @@ public class MaBot implements TradeBot {
                 sellPrice = depth.getSell(0).getPrice();
                 
                 /* should a buy price rise too high, move target buy price up too */
-                BigDecimal nextTargetBuyPrice = targetBuyPrice.multiply(sellFactor);
+                BigDecimal nextTargetBuyPrice = targetBuyPrice.multiply(sellFactor, MathContext.DECIMAL128);
                 if (buyPrice.compareTo(nextTargetBuyPrice) > 0)
                 {
                     targetBuyPrice = nextTargetBuyPrice;
+                    stopLossPrice = stopLossPrice.multiply(sellFactor, MathContext.DECIMAL128);
+                    logger.info("*** Thresholds Moved Up ***");
                 }
 
                 boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
@@ -675,7 +687,7 @@ public class MaBot implements TradeBot {
                 }
                 else
                 {
-                    logger.info("current deal      |");
+                    logger.info("current deal     |");
                 }
                 if (lastDeal != null)
                 {
@@ -685,12 +697,31 @@ public class MaBot implements TradeBot {
                 }
                 else
                 {
-                    logger.info("last deal         |");
+                    logger.info("last deal        |");
                 }
                 String priceTrend = macd.signum() > 0 ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
-                logger.info(String.format("%3s              |                  %12s                  |", currency, getFunds(currency).toPlainString()));
-                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, getFunds(payCurrency).toPlainString()));
+                BigDecimal currencyValue = getFunds(currency);
+                BigDecimal payCurrencyValue = getFunds(payCurrency);
+                BigDecimal currentAssets = buyPrice.multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));
+                BigDecimal profit = currentAssets.subtract(initialAssets);
+                BigDecimal profitPercent = profit.divide(initialAssets, MathContext.DECIMAL128);
+                BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
+                BigDecimal profitPercentPerDay = profitPercent.divide(uptimeDays, MathContext.DECIMAL128);
+                BigDecimal profitPercentPerMonth = profitPercentPerDay.multiply(new BigDecimal(30));
+                BigDecimal profitPercentPerYear = profitPercentPerDay.multiply(new BigDecimal(365));
+
+                logger.info(String.format("days uptime     |                  %12s                  |", uptimeDays.toPlainString()));
+                logger.info(String.format("initial (%4s)   |                  %12s                  |", payCurrency, initialAssetsString));
+                logger.info(String.format("current (%4s)   |                  %12s                  |", payCurrency, currentAssets.toPlainString()));
+                logger.info(String.format("profit (%4s)    |                  %12s                  |", payCurrency, profit.toPlainString()));
+                logger.info(String.format("profit (/%)      |                  %12s                  |", profitPercent.toPlainString()));
+                logger.info(String.format("        +-day   |                  %12s                  |", profitPercentPerDay.toPlainString()));
+                logger.info(String.format("        +-month |                  %12s                  |", profitPercentPerMonth.toPlainString()));
+                logger.info(String.format("        +-year  |                  %12s                  |", profitPercentPerYear.toPlainString()));
+
+                logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.toPlainString()));
+                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.toPlainString()));
                 if (targetBuyPrice != null)
                 {
                     logger.info(String.format("buy              | [ %12f ] %12f [ %12f ] |", stopLossPrice, buyPrice, targetBuyPrice));
