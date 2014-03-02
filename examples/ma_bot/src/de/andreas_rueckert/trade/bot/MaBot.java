@@ -51,6 +51,7 @@ import de.andreas_rueckert.util.LogUtils;
 import de.andreas_rueckert.util.ModuleLoader;
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
@@ -366,22 +367,24 @@ public class MaBot implements TradeBot {
                     BigDecimal priceCoeff = BigDecimal.ONE.subtract(doubleFee).add(feeSquared);
                     BigDecimal profitCoeff = BigDecimal.ONE.add(MIN_PROFIT);
 		            sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
-                    logger.info("        fee = " + fee);
-                    logger.info("sell factor = " + sellFactor);
                     analyzer = ChartAnalyzer.getInstance(); 
                     shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                     longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                     macd = shortEma.subtract(longEma);
                     lastMacd = macd;
-                    lastPrice = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair).getSell(0).getPrice();
+                    depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair); 
+                    lastPrice = depth.getSell(0).getPrice();
                     targetBuyPrice = lastPrice.multiply(sellFactor, MathContext.DECIMAL128);
                     stopLossPrice = lastPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
                     BigDecimal currencyValue = getFunds(currency);                                                                                                            
                     BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
-                    initialAssets = buyPrice.multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));                                 
-                    initialAssetsString = initialAssets.toPlainString();
+                    initialAssets = depth.getBuy(0).getPrice().multiply(currencyValue).multiply(BigDecimal.ONE.subtract(fee).add(payCurrencyValue));                                 
+                    initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING);
                     cycleNum = 1;
                     shortEmaAbove = shortEma.compareTo(longEma) > 0;
+                    logger.info("           fee = " + fee);
+                    logger.info("   sell factor = " + sellFactor);
+                    logger.info("initial assets = " + initialAssetsString);
                 }
                 catch (Exception e)
                 {
@@ -711,17 +714,17 @@ public class MaBot implements TradeBot {
                 BigDecimal profitPercentPerMonth = profitPercentPerDay.multiply(new BigDecimal(30));
                 BigDecimal profitPercentPerYear = profitPercentPerDay.multiply(new BigDecimal(365));
 
-                logger.info(String.format("days uptime     |                  %12s                  |", uptimeDays.toPlainString()));
-                logger.info(String.format("initial (%4s)   |                  %12s                  |", payCurrency, initialAssetsString));
-                logger.info(String.format("current (%4s)   |                  %12s                  |", payCurrency, currentAssets.toPlainString()));
-                logger.info(String.format("profit (%4s)    |                  %12s                  |", payCurrency, profit.toPlainString()));
-                logger.info(String.format("profit (/%)      |                  %12s                  |", profitPercent.toPlainString()));
-                logger.info(String.format("        +-day   |                  %12s                  |", profitPercentPerDay.toPlainString()));
-                logger.info(String.format("        +-month |                  %12s                  |", profitPercentPerMonth.toPlainString()));
-                logger.info(String.format("        +-year  |                  %12s                  |", profitPercentPerYear.toPlainString()));
+                logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(4, RoundingMode.CEILING)));
+                logger.info(String.format("initial ( %4s ) |                  %12s                  |", payCurrency, initialAssetsString));
+                logger.info(String.format("current ( %4s ) |                  %12s                  |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, profit.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit (%%)       |                  %12s                  |", profitPercent.setScale(4, RoundingMode.CEILING)));
+                logger.info(String.format("        +-day    |                  %12s                  |", profitPercentPerDay.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("        +-month  |                  %12s                  |", profitPercentPerMonth.setScale(2, RoundingMode.CEILING)));
+                logger.info(String.format("        +-year   |                  %12s                  |", profitPercentPerYear.setScale(1, RoundingMode.CEILING)));
 
-                logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.toPlainString()));
-                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.toPlainString()));
+                logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.setScale(6, RoundingMode.CEILING)));
+                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.setScale(6, RoundingMode.CEILING)));
                 if (targetBuyPrice != null)
                 {
                     logger.info(String.format("buy              | [ %12f ] %12f [ %12f ] |", stopLossPrice, buyPrice, targetBuyPrice));
