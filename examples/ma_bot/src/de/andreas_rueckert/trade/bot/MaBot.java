@@ -77,9 +77,10 @@ public class MaBot implements TradeBot {
      */
     private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00098402");
 
-    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.08");
-
-    private final static BigDecimal PROFIT_TO_TAKE = new BigDecimal("0.25");
+    /**
+     * The maximum loss
+     */
+    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.2");
 
     /**
      * The minimal trade volume.
@@ -87,29 +88,15 @@ public class MaBot implements TradeBot {
     private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.1");
 
     /**
-     * The interval for the SMA value.
-     */
-    //private final static long SMA_INTERVAL = 3L * 60L * 60L * 1000000L; // 3 hrs for now
-
-    /**
      * The interval to update the bot activities.
      */
     private final static int UPDATE_INTERVAL = 60;  // 60 seconds for now...
     
-    /*private final static long SMA_CYCLES = 7L; // 124 184 my wife is witch
-    private final static long LONG_SMA_CYCLES = 30L;
-    private final static long SMA_INTERVAL = SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    private final static long LONG_SMA_INTERVAL = LONG_SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    */
-
     private final static String EMA_SHORT_INTERVAL = "7m";
     private final static String EMA_LONG_INTERVAL = "30m";
     private final static String MACD_SHORT_INTERVAL = "12m";
     private final static String MACD_LONG_INTERVAL = "26m";
     private final static String MACD_SMA_INTERVAL = "9m";
-
-    /* Maximum number of attempts to retry an order failed due to insufficient funds/depth */
-    //private final static int MAX_PENDING_ATTEMPTS = 5;
 
     // Instance variables
 
@@ -165,7 +152,6 @@ public class MaBot implements TradeBot {
     public MaBot() {
 
 	// Set trade site and currency pair to trade.
-	//_tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BtcE");
     StringBuilder configLine = new StringBuilder();
     try
     {
@@ -180,8 +166,9 @@ public class MaBot implements TradeBot {
         System.exit(-1);
     }
     _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
-    _tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BTCe");
-    
+    //_tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BTCe");
+
+    _tradeSite = _tradeSiteUserAccount.getTradeSite();    
     PersistentPropertyList settings = new PersistentPropertyList();
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
@@ -328,10 +315,10 @@ public class MaBot implements TradeBot {
                     long t1 = System.currentTimeMillis();
                     try
                     {
-                        checkOldOrders();
+                        checkPendingOrder();
                         calculateSignals();
                         doTrade();
-                        cycleNum++;
+                        reportCycleSummary();
                     }
                     catch (Exception e)
                     {
@@ -339,19 +326,14 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
+                        cycleNum++;
                         sleepUntilNextCycle(t1);
                     } 
 		        }
 		    }
 
-            /*private void decrementPendingSellAttempts()
-            {
-                pendingSellAttempts = pendingSellAttempts == 0 ? MAX_PENDING_ATTEMPTS : pendingSellAttempts - 1;
-            }*/
-
             private void initTrade()
             {
-                //BigDecimal numberOne = new BigDecimal("1"); 
                 stopLossFactor = BigDecimal.ONE.subtract(LOSS_TO_STOP);
                 lastDeal = null;
                 try
@@ -396,51 +378,46 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private void checkOldOrders()
+            private void checkPendingOrder()
             {
                 if (pendingOrderId != null) 
                 {
                     Order pendingOrder = orderBook.getOrder(pendingOrderId);
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
-                    if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
+                    if (pendingOrderResult != OrderStatus.UNKNOWN) 
                     {
-                        logger.info("cancelling partially filled order");
-                        if (orderBook.cancelOrder(pendingOrder))
+                        boolean amountChanged = oldCurrencyAmount != null && oldCurrencyAmount.compareTo(getFunds(currency)) != 0;
+                        if (!amountChanged)
+                        {
+                            logger.info("order has been executed, but nothing changed!");
+                        }
+                        else
                         {
                             pendingOrderId = null;
+                            lastDeal = pendingOrder;
+                            lastPrice = pendingOrder.getPrice();
+                            if (pendingOrder.getOrderType() == OrderType.BUY)
+                            {
+                                stopLossPrice = lastPrice.multiply(stopLossFactor);
+                                targetBuyPrice = lastPrice.multiply(sellFactor);
+                            }
+                            else
+                            {
+                                // TODO
+                            }
                         }
-                        /*if (pendingOrder.getOrderType() == OrderType.SELL)
+                        if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
                         {
-                            //decrementPendingSellAttempts();
-                            logger.info("will try to sell again next time");
+                            logger.info("cancelling partially filled order");
+                            if (orderBook.cancelOrder(pendingOrder))
+                            {
+                                pendingOrderId = null;
+                            }
                         }
-                        else
-                        {
-                            logger.info("will try to buy again next time");
-                        }*/
-                    }
-                    else if (pendingOrderResult != OrderStatus.UNKNOWN && oldCurrencyAmount != null &&
-                        oldCurrencyAmount.compareTo(getFunds(currency)) == 0)
-                    {
-                        logger.info("order has been executed, but nothing changed!");
-                        /*if (pendingOrder.getOrderType() == OrderType.SELL)
-                        {
-                            decrementPendingSellAttempts();
-                            logger.info("will try to sell again next time");
-                        }
-                        else
-                        {
-                            logger.info("will try to buy again next time");
-                        }*/
-                    }
-                    else
-                    {
-                        pendingOrderId = null;
                     }
                 }                        
             }
-
-
+            
             private void calculateSignals()
             {
                 shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
@@ -451,11 +428,11 @@ public class MaBot implements TradeBot {
                 buyPrice = depth.getBuy(0).getPrice();
                 sellPrice = depth.getSell(0).getPrice();
                 
-                /* should a short EMA rise too high, move stop loss up too */
+                /* should a short EMA rise too high above target buy price, move stop loss up too */
                 if (shortEma.compareTo(targetBuyPrice) > 0)
                 {
                     stopLossPrice = sellPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
-                    logger.info("*** Stop Loss Moved Up ***");
+                    logger.info("*** Stop Loss Adjusted ***");
                 }
 
                 boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
@@ -464,7 +441,6 @@ public class MaBot implements TradeBot {
                 shortEmaAbove = newShortEmaAbove;
                 macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
                 macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
-                lastMacd = macd;
             }
 
             private void doTrade()
@@ -474,47 +450,31 @@ public class MaBot implements TradeBot {
                 {
                     oldCurrencyAmount = getFunds(currency);
  			        order = buyCurrency(depth);
-                    if (order != null)
-                    {
-                        pendingOrderId = order.getId();
-                    }
                 }
-                else if (/*isTimeToSell() || */isStopLoss() || isMinProfit()) 
+                else if (isStopLoss() || isMinProfit()) 
                 {
                     oldCurrencyAmount = getFunds(currency);
 	                order = sellCurrency(depth); 
-                    if (order != null)
-                    {
-                        pendingOrderId = order.getId();
-                    }
                 }
-                try
+                if (order != null && order.getStatus() != OrderStatus.ERROR)
                 {
-                    reportCycleSummary();
-                }
-                catch (Exception e)
-                {
-                    logger.error(e);
-                }
+                    pendingOrderId = order.getId();                        
+                }                
             }
 
-            /*private boolean isTakeProfit()
+            private boolean isTrendDown()
             {
-                if (lastPrice == null)
-                {
-                    return false;
-                }
-                boolean result = buyPrice.compareTo(lastPrice.multiply(takeProfitFactor)) > 0 && macd.signum() > 0;
-                if (result)
-                {
-                    logger.info("*** Take Profit ***");
-                }
-                return result;
-            }*/
+                return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
+            }
+
+            private boolean isTrendUp()
+            {
+                return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
+            }
 
             private boolean isStopLoss()
             {
-                if (buyPrice.compareTo(stopLossPrice) < 0 && macd.signum() < 0)
+                if (buyPrice.compareTo(stopLossPrice) < 0)
                 {
                     logger.info("*** Stop Loss ***");
                     return true;
@@ -527,7 +487,6 @@ public class MaBot implements TradeBot {
 
             private boolean isMinProfit()
             {
-                boolean result = false;
                 if (targetBuyPrice != null && buyPrice.compareTo(targetBuyPrice) > 0 && isTrendDown())
                 {
                     logger.info("*** Minimal Profit ***");
@@ -539,39 +498,17 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private boolean isTrendDown()
-            {
-                return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
-            }
-
-            private boolean isTrendUp()
-            {
-                return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
-            }
-            
-            /*private boolean isTimeToSell()
-            {
-                if (isTrendDown())
-                {
-                    // we would retry sell order only if trend is still down
-                    boolean needToRetry = pendingSellAttempts > 0;
-                    if (needToRetry)
-                    {
-                        logger.info(String.format("*** Time To Sell [%d] ***", pendingSellAttempts));
-                        return true;
-                    }
-                }
-                return false;
-            }*/
-            
             private boolean isTimeToBuy()
             {
-                boolean result = isTrendUp();
-                if (result)
+                if (isTrendUp())
                 {
                     logger.info("*** Time To Buy ***");
+                    return true;
                 }
-                return result;
+                else
+                {
+                    return false;
+                }
             }
 
             private Order buyCurrency(Depth depth)
@@ -606,14 +543,7 @@ public class MaBot implements TradeBot {
 				        // Create a buy order...
 			            String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
-                        Order result = orderBook.getOrder(orderId);
-                        if (result != null && result.getStatus() != OrderStatus.ERROR);
-                        {
-                            lastPrice = sellPrice;
-                            stopLossPrice = sellPrice.multiply(stopLossFactor);
-                            targetBuyPrice = sellPrice.multiply(sellFactor);
-                            return result;
-                        }
+                        return orderBook.getOrder(orderId);
                     }
                     else
                     {
@@ -659,25 +589,17 @@ public class MaBot implements TradeBot {
                         Price buyPrice = depthOrder.getPrice();
 		                String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
-                        Order result = orderBook.getOrder(orderId);
-                        if (result != null && result.getStatus() != OrderStatus.ERROR);
-                        {
-                            lastPrice = buyPrice;
-                            //pendingSellAttempts = 0;
-                            return result;
-                        }
+                        return orderBook.getOrder(orderId);
                     }
                     else
                     {
                         logger.info("your funds to sell are lower than minimum!");
-                        //pendingSellAttempts = 0;
                     }
 		        }
                 else
                 {
                     logger.info("funds market can buy at this price are lower than minimum!");
                 }
-                //decrementPendingSellAttempts();
                 return null;
             }
 
@@ -687,7 +609,6 @@ public class MaBot implements TradeBot {
                 if (order != null)
                 {
                     logger.info(String.format("current deal     | %s", order));
-                    lastDeal = order;
                 }
                 else
                 {
@@ -710,32 +631,29 @@ public class MaBot implements TradeBot {
                 BigDecimal payCurrencyValue = getFunds(payCurrency);
                 BigDecimal buyPriceLessFee = buyPrice.multiply(BigDecimal.ONE.subtract(fee));
                 BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
-                BigDecimal profit = currentAssets.subtract(initialAssets);
-                BigDecimal profitPercent = profit.divide(initialAssets, MathContext.DECIMAL128);
-                BigDecimal profitPercentPerDay = profitPercent.divide(uptimeDays, MathContext.DECIMAL128);
-                BigDecimal profitPercentPerMonth = profitPercentPerDay.multiply(new BigDecimal(30));
-                BigDecimal profitPercentPerYear = profitPercentPerDay.multiply(new BigDecimal(365));
-                
+                BigDecimal absProfit = currentAssets.subtract(initialAssets);
+                BigDecimal profit = currentAssets.divide(initialAssets, MathContext.DECIMAL128);
+                double profitPercent = (profit.doubleValue() - 1) * 100;;
+                double profitPerDay = Math.pow(profit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
+                double profitPerMonth = Math.pow(profitPerDay, 30);
+                double profitPerYear = Math.pow(profitPerMonth, 12);
+
                 // reference profit (refProfit) is a virtual profit of sole investing in currency, without trading
                 // it is here for one to be able to compare bot work versus just leave currency intact
-                BigDecimal refProfit = buyPriceLessFee.subtract(initialSellPrice);
-                BigDecimal refProfitPercent = refProfit.divide(initialSellPrice, MathContext.DECIMAL128);
-                BigDecimal refProfitPercentPerDay = refProfitPercent.divide(uptimeDays, MathContext.DECIMAL128);
-                BigDecimal refProfitPercentPerMonth = refProfitPercentPerDay.multiply(new BigDecimal(30));
-                BigDecimal refProfitPercentPerYear = refProfitPercentPerDay.multiply(new BigDecimal(365));
+                BigDecimal refProfit = buyPriceLessFee.divide(initialSellPrice, MathContext.DECIMAL128);
+                double refProfitPercent = (refProfit.doubleValue() - 1) * 100;
+                double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
+                double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
+                double refProfitPerYear = Math.pow(refProfitPerMonth, 12);
 
                 logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(3, RoundingMode.CEILING)));
                 logger.info(String.format("initial ( %4s ) |                  %12s                  |", payCurrency, initialAssetsString));
                 logger.info(String.format("current ( %4s ) |                  %12s                  |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
-                logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, profit.setScale(8, RoundingMode.CEILING)));
-                logger.info(String.format("profit (%%)       |                  %12s                  |", profitPercent.setScale(4, RoundingMode.CEILING)));
-                logger.info(String.format("        +-day    |                  %12s                  |", profitPercentPerDay.setScale(3, RoundingMode.CEILING)));
-                logger.info(String.format("        +-month  |                  %12s                  |", profitPercentPerMonth.setScale(2, RoundingMode.CEILING)));
-                logger.info(String.format("        +-year   |                  %12s                  |", profitPercentPerYear.setScale(1, RoundingMode.CEILING)));
-                logger.info(String.format("ref. profit (%%)  |                  %12s                  |", refProfitPercent.setScale(4, RoundingMode.CEILING)));
-                logger.info(String.format("        +-day    |                  %12s                  |", refProfitPercentPerDay.setScale(3, RoundingMode.CEILING)));
-                logger.info(String.format("        +-month  |                  %12s                  |", refProfitPercentPerMonth.setScale(2, RoundingMode.CEILING)));
-                logger.info(String.format("        +-year   |                  %12s                  |", refProfitPercentPerYear.setScale(1, RoundingMode.CEILING)));
+                logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, absProfit.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit (%%)       |                    %+10.1f [   %+10.1f ] |", profitPercent, refProfitPercent));
+                logger.info(String.format("        +-day    |                    %+10.1f [   %+10.1f ] |", (profitPerDay - 1) * 100, (refProfitPerDay - 1) * 100));
+                logger.info(String.format("        +-month  |                    %+10.1f [   %+10.1f ] |", (profitPerMonth - 1) * 100, (refProfitPerMonth - 1) * 100));
+                logger.info(String.format("        +-year   |                    %+10.1f [   %+10.1f ] |", (profitPerYear - 1) * 100, (refProfitPerYear - 1) * 100));
 
                 logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.setScale(6, RoundingMode.CEILING)));
                 logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.setScale(6, RoundingMode.CEILING)));
@@ -754,6 +672,7 @@ public class MaBot implements TradeBot {
                 logger.info(String.format("  +-prev         |                  %12f                  |", lastMacd));
                 logger.info(String.format("  +-delta        |                  %12f      [ %s ]       |", deltaMacd, macdTrend));
                 logger.info(              "-----------------+------------------------------------------------+");
+                lastMacd = macd;
             }
 
             private void sleepUntilNextCycle(long t1)
