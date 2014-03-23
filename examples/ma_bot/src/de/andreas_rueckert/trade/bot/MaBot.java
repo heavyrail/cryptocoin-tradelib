@@ -37,8 +37,10 @@ import de.andreas_rueckert.trade.CurrencyPairImpl;
 import de.andreas_rueckert.trade.Depth;
 
 import de.andreas_rueckert.trade.Trade;
+import de.andreas_rueckert.trade.TradeType;
 import de.andreas_rueckert.trade.order.CryptoCoinOrderBook;
 import de.andreas_rueckert.trade.order.Order;
+import de.andreas_rueckert.trade.order.SiteOrder;
 
 import de.andreas_rueckert.trade.order.OrderFactory;
 import de.andreas_rueckert.trade.order.OrderType;
@@ -48,11 +50,17 @@ import de.andreas_rueckert.trade.Price;
 import de.andreas_rueckert.trade.site.TradeSite;
 import de.andreas_rueckert.util.LogUtils;
 import de.andreas_rueckert.util.ModuleLoader;
+import de.andreas_rueckert.util.TimeUtils;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.LinkedList;
 import java.io.IOException;
 import java.io.File;
 
@@ -70,31 +78,37 @@ public class MaBot implements TradeBot {
     // Static variables
 
     /**
-     * The minimal profit in percent for a trade, compared to the SMA.
+     * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal( "0.2");
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00098402");
+
+    /**
+     * The maximum loss
+     */
+    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.2");
 
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount( "0.01");
-
-    /**
-     * The interval for the SMA value.
-     */
-    //private final static long SMA_INTERVAL = 3L * 60L * 60L * 1000000L; // 3 hrs for now
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.1");
 
     /**
      * The interval to update the bot activities.
      */
     private final static int UPDATE_INTERVAL = 60;  // 60 seconds for now...
     
-    private final static long SMA_CYCLES = 7L; // 124 184 my wife is witch
-    private final static long LONG_SMA_CYCLES = 30L;
-    private final static long SMA_INTERVAL = SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    private final static String EMA_INTERVAL = "14m";
-    private final static long LONG_SMA_INTERVAL = LONG_SMA_CYCLES * UPDATE_INTERVAL * 1000000L;
-    private final static String LONG_EMA_INTERVAL = "60m";
+    private final static int MACD_EMA_INTERVALS_NUM = 9;
+    private final static long MACD_EMA_TIME_PERIOD = 60L * 1000000L; // one minute - must correspond to next line!
+    private final static long MACD_EMA_INTERVAL_MICROS = MACD_EMA_INTERVALS_NUM * MACD_EMA_TIME_PERIOD;
+    private final static String MACD_EMA_INTERVAL = Integer.toString(MACD_EMA_INTERVALS_NUM) + "m"; // 'm' means minute
+    
+    private final static String EMA_SHORT_INTERVAL = "12m";
+    private final static long EMA_SHORT_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * 12;
+    private final static String EMA_LONG_INTERVAL = "26m";
+    private final static long EMA_LONG_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * 26;
+
+    private final BigDecimal TWO = new BigDecimal("2");
+    private final BigDecimal THOUSAND = new BigDecimal("1000");
 
     // Instance variables
 
@@ -126,6 +140,22 @@ public class MaBot implements TradeBot {
 
     private CryptoCoinOrderBook orderBook;
 
+    private Price lastPrice;
+
+    private BigDecimal targetBuyPrice;
+
+    private BigDecimal stopLossPrice;
+
+    private BigDecimal fee;
+
+    private BigDecimal initialAssets;
+
+    private String initialAssetsString;
+
+    private BigDecimal initialSellPrice;
+
+    private int cycleNum;
+
     // Constructors
 
     /**
@@ -134,7 +164,6 @@ public class MaBot implements TradeBot {
     public MaBot() {
 
 	// Set trade site and currency pair to trade.
-	//_tradeSite = ModuleLoader.getInstance().getRegisteredTradeSite( "BtcE");
     StringBuilder configLine = new StringBuilder();
     try
     {
@@ -149,7 +178,7 @@ public class MaBot implements TradeBot {
         System.exit(-1);
     }
     _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
-    _tradeSite = new BtcEClient();
+    _tradeSite = _tradeSiteUserAccount.getTradeSite();    
     PersistentPropertyList settings = new PersistentPropertyList();
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
@@ -257,113 +286,54 @@ public class MaBot implements TradeBot {
 
         final Logger logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
-        de.andreas_rueckert.util.TimeUtils.microsFromString("7m");
         logger.info("MABot started");
        
         // Create a ticker thread.
         _updateThread = new Thread() 
         {
 
-            Price sma = null;
-            Price longSma = null;
-            boolean shortSmaAbove;
+            Price shortEma;
+            Price longEma;
+            ArrayList<Trade> macdCache;
+            BigDecimal macd;
+            Price macdLine;
+            BigDecimal macdSignalLine;
+            BigDecimal lastMacd;
+            BigDecimal deltaMacd;
+            Price buyPrice;
+            Price sellPrice;
+            //boolean shortEmaAbove;
+            //boolean upsideDown;
+            //boolean downsideUp;
+            boolean macdUpsideDown;
+            boolean macdDownsideUp;
             Order order;
             Order lastDeal;
-            BigDecimal longSmaToBuy;
-            BigDecimal longSmaToSell;
+            ChartAnalyzer analyzer;
+            ChartProvider provider;
+            TimeUtils timeUtils;
             Depth depth;
+            BigDecimal sellFactor;
+            BigDecimal stopLossFactor;
+            BigDecimal takeProfitFactor;
+            BigDecimal oldCurrencyAmount;
+            String pendingOrderId;
 
             /**
             * The main bot thread.
             */
             @Override public void run() 
             {
-                ChartAnalyzer analyzer = null;
-                BigDecimal sellFactor = (new BigDecimal("100")).subtract(MIN_PROFIT).divide((new BigDecimal( "100")), MathContext.DECIMAL128);
-		        BigDecimal buyFactor = (new BigDecimal("100")).add(MIN_PROFIT).divide((new BigDecimal( "100")), MathContext.DECIMAL128);
-
-                try
-                {
-                    analyzer = ChartAnalyzer.getInstance(); 
-                    System.out.println("1");
-                    sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
-                    System.out.println("2");
-                    longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
-                    System.out.println("3");
-                }
-                catch (Exception e)
-                {
-                    logger.error(e);
-                    System.exit(-1);
-                }
-
-                longSmaToBuy = longSma.multiply(buyFactor);
-                longSmaToSell = longSma.multiply(sellFactor);
-                shortSmaAbove = sma.compareTo(longSmaToBuy) > 0;
-                lastDeal = null;
-
+                initTrade();
                 while( _updateThread == this) 
-                {  // While the bot thread is not stopped...
-                   
+                { 
                     long t1 = System.currentTimeMillis();
-                    boolean toBuy = false;
-                    boolean toSell = false;
-
                     try
                     {
-                        //check if there are pending orders to cancel
-                        /*
-                        Map<String, Order> allOrders = orderBook.getOrders();
-                        for (int orderIndex = 0; orderIndex < allOrders.size(); ++orderIndex) 
-                        {
-                            String orderKey = (String) (allOrders.keySet().toArray()[orderIndex]);
-                            Order currentOrder = allOrders.get(orderKey);
-                            if (currentOrder.getStatus() != OrderStatus.FILLED)
-                            {
-                                if (currentOrder.getOrderType() == OrderType.BUY)
-                                {
-                                    toBuy = true;
-                                }
-                                else
-                                {
-                                    toSell = true;
-                                }
-                                orderBook.cancelOrder(currentOrder);
-                            }
-                        }*/
-
-                        sma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_INTERVAL);
-                        longSma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, LONG_EMA_INTERVAL);
-  	    	            depth = ChartProvider.getInstance().getDepth(_tradeSite, _tradedCurrencyPair);
-                        longSmaToBuy = longSma.multiply(buyFactor);
-                        longSmaToSell = longSma.multiply(sellFactor);
-                        boolean downsideUp = !shortSmaAbove && sma.compareTo(longSmaToBuy) > 0;
-                        boolean upsideDown = shortSmaAbove && sma.compareTo(longSmaToSell) < 0;
-
-                        System.out.println("buy (sma > longSmaToBuy) :  " + (sma.compareTo(longSmaToBuy) > 0));
-                        System.out.println("sell (sma < longSmaToSell): " + (sma.compareTo(longSmaToSell) < 0));
-
-                        order = null;
-                        if (toBuy || downsideUp) 
-                        {
-                            shortSmaAbove = true;
-                            toBuy = false;
- 			                order = buyCurrency(depth);
-                        }
-                        else if (toSell || upsideDown) 
-                        {
-                            shortSmaAbove = false;
-                            toSell = false;
- 			                order = sellCurrency(depth); 
-                        }
-                        /*if (order != null)
-                        {
-                            OrderStatus status = orderBook.checkOrder(order.get());
-                            System.out.println(order);
-                            System.out.println(status);
-                        }*/
+                        checkPendingOrder();
+                        calculateSignals();
+                        doTrade();
                         reportCycleSummary();
-                        
                     }
                     catch (Exception e)
                     {
@@ -371,38 +341,411 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
+                        cycleNum++;
                         sleepUntilNextCycle(t1);
                     } 
 		        }
 		    }
 
-            private void reportCycleSummary()
+            private void initTrade()
             {
-                logger.info(String.format("trend     | [ %s ] ", shortSmaAbove ? "+" : "-"));
-                if (order != null)
+                macdCache = new ArrayList<Trade>();  
+                stopLossFactor = BigDecimal.ONE.subtract(LOSS_TO_STOP);
+                lastDeal = null;
+                try
                 {
-                    logger.info(String.format("current   | %s", order));
-                    logger.info(String.format(" \\-status | %s", order.getStatus()));
-                    lastDeal = order;
+                    if (_tradeSite instanceof BtcEClient)
+                    {
+                        fee = ((BtcEClient) _tradeSite).getFeeForCurrencyPairTrade(_tradedCurrencyPair);
+                    }
+                    else
+                    {
+                        fee = _tradeSite.getFeeForTrade();
+                    }
+                    BigDecimal doubleFee = fee.add(fee);
+                    BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
+                    BigDecimal priceCoeff = BigDecimal.ONE.subtract(doubleFee).add(feeSquared);
+                    BigDecimal profitCoeff = BigDecimal.ONE.add(MIN_PROFIT);
+		            sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
+                    analyzer = ChartAnalyzer.getInstance(); 
+                    provider = ChartProvider.getInstance();
+                    timeUtils = TimeUtils.getInstance();
+                   
+                    long startTime = timeUtils.getCurrentGMTTimeMicros() - MACD_EMA_INTERVAL_MICROS;
+                    long timeFrame = MACD_EMA_INTERVAL_MICROS + EMA_LONG_INTERVAL_MICROS;
+                    Trade [] trades = provider.getTrades(_tradeSite, _tradedCurrencyPair, timeFrame);
+                    logger.info("filling MACD cache");
+                    for (int i = MACD_EMA_INTERVALS_NUM - 1; i >= 0; i--)
+                    {
+                        shortEma = analyzer.ema(trades, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+                        longEma = analyzer.ema(trades, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+                        updateMacdSignals(shortEma, longEma, startTime);
+                        startTime += MACD_EMA_TIME_PERIOD;
+                        logger.info(shortEma.subtract(longEma) + " at " + new Date(lastDeal.getTimestamp() / 1000));
+                    }
+                    logger.info("MACD cache filled");
+                    lastMacd = macd;
+
+                    depth = provider.getDepth(_tradeSite, _tradedCurrencyPair); 
+                    lastPrice = depth.getSell(0).getPrice();
+                    initialSellPrice = lastPrice.multiply(BigDecimal.ONE.add(fee));
+                    targetBuyPrice = lastPrice.multiply(sellFactor, MathContext.DECIMAL128);
+                    stopLossPrice = lastPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
+                    BigDecimal currencyValue = getFunds(currency);                                                                                                            
+                    BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
+                    initialAssets = initialSellPrice.multiply(currencyValue).add(payCurrencyValue);                                 
+                    initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING).toPlainString();
+                    cycleNum = 1;
+                    //shortEmaAbove = shortEma.compareTo(longEma) > 0;
+                    logger.info("           fee = " + fee);
+                    logger.info("   sell factor = " + sellFactor);
+                    logger.info("initial assets = " + initialAssetsString);
+                }
+                catch (Exception e)
+                {
+                    logger.error(e);
+                    System.exit(-1);
+                }
+            }
+
+            private void updateMacdSignals(Price shortEma, Price longEma, final long timestamp)
+            {
+                macdLine = shortEma.subtract(longEma);
+                final Price price = macdLine;
+                Trade t = new Trade()
+                {
+                    public Amount getAmount()
+                    {
+                        return null;
+                    }
+
+                    public String getId()
+                    {
+                        return null;
+                    }
+
+                    public Price getPrice()
+                    {
+                        return price;
+                    }
+                    
+                    public long getTimestamp()
+                    {
+                        return timestamp;
+                    }
+                    
+                    public TradeType getType()
+                    {
+                        return null;
+                    }
+                };
+                macdCache.add(t);
+                if (macdCache.size() > MACD_EMA_INTERVALS_NUM)
+                {
+                    macdCache.remove(0);
+                }
+                macdSignalLine = analyzer.ema((Trade []) macdCache.toArray(), MACD_EMA_INTERVAL);
+                macd = macdLine.subtract(macdSignalLine);
+            }
+
+            private void checkPendingOrder()
+            {
+                if (pendingOrderId != null) 
+                {
+                    Order pendingOrder = orderBook.getOrder(pendingOrderId);
+                    OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
+                    if (pendingOrderResult != OrderStatus.UNKNOWN) 
+                    {
+                        boolean amountChanged = oldCurrencyAmount != null && oldCurrencyAmount.compareTo(getFunds(currency)) != 0;
+                        if (!amountChanged)
+                        {
+                            logger.info("order has been executed, but nothing changed!");
+                        }
+                        else
+                        {
+                            pendingOrderId = null;
+                            lastDeal = pendingOrder;
+                            lastPrice = pendingOrder.getPrice();
+                            if (pendingOrder.getOrderType() == OrderType.BUY)
+                            {
+                                stopLossPrice = lastPrice.multiply(stopLossFactor);
+                                targetBuyPrice = lastPrice.multiply(sellFactor);
+                            }
+                            else
+                            {
+                                // TODO
+                            }
+                        }
+                        if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
+                        {
+                            logger.info("cancelling partially filled order");
+                            if (orderBook.cancelOrder(pendingOrder))
+                            {
+                                pendingOrderId = null;
+                            }
+                        }
+                    }
+                }                        
+            }
+            
+            private void calculateSignals()
+            {
+   	            depth = provider.getDepth(_tradeSite, _tradedCurrencyPair);
+                buyPrice = depth.getBuy(0).getPrice();
+                sellPrice = depth.getSell(0).getPrice();
+                BigDecimal meanPrice = buyPrice.add(sellPrice).divide(TWO, MathContext.DECIMAL128);
+                shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                updateMacdSignals(shortEma, longEma, timeUtils.getCurrentGMTTimeMicros());                
+                deltaMacd = macd.subtract(lastMacd);
+               
+                /* should a short EMA rise too high above target buy price, move stop loss up too */
+                if (shortEma.compareTo(targetBuyPrice) > 0)
+                {
+                    stopLossPrice = sellPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
+                    logger.info("*** Stop Loss Adjusted ***");
+                }
+
+                /*boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
+                downsideUp = !shortEmaAbove && newShortEmaAbove;
+                upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
+                shortEmaAbove = newShortEmaAbove;*/
+                macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
+                macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
+            }
+
+            private void doTrade()
+            {
+                order = null;
+                if (isTimeToBuy()) 
+                {
+                    oldCurrencyAmount = getFunds(currency);
+ 			        order = buyCurrency(depth);
+                }
+                else if (isStopLoss() || isMinProfit()) 
+                {
+                    oldCurrencyAmount = getFunds(currency);
+	                order = sellCurrency(depth); 
+                }
+                if (order != null && order.getStatus() != OrderStatus.ERROR)
+                {
+                    pendingOrderId = order.getId();                        
+                }                
+            }
+
+            /*private boolean isTrendDown()
+            /{
+                //return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
+                return macd.signum() < 0;
+            }*/
+
+            private boolean isTrendUp()
+            {
+                //return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
+                return macd.signum() > 0;
+            }
+
+            private boolean isStopLoss()
+            {
+                if (buyPrice.compareTo(stopLossPrice) < 0)
+                {
+                    logger.info("*** Stop Loss ***");
+                    return true;
                 }
                 else
                 {
-                    logger.info("current   |");
+                    return false;
+                }
+            }
+
+            private boolean isMinProfit()
+            {
+                if (targetBuyPrice != null && buyPrice.compareTo(targetBuyPrice) > 0 && !isTrendUp())
+                {
+                    logger.info("*** Minimal Profit ***");
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            private boolean isTimeToBuy()
+            {
+                if (isTrendUp())
+                {
+                    logger.info("*** Time To Buy ***");
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            private Order buyCurrency(Depth depth)
+            {
+                // Check, if there is an opportunity to buy something, and the volume of the
+		        // order is higher than the minimum trading volume.
+
+                int sellOrders = depth.getSellSize();
+                int i = 0;
+                DepthOrder depthOrder = null;
+                Amount availableAmount = null;
+                do
+                {
+                    depthOrder = depth.getSell(i++);
+                    availableAmount = depthOrder.getAmount();
+                }
+                while (i < sellOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
+                
+                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0)
+                {
+		            // Now check, if we have any funds to buy something.
+                    Price sellPrice = depthOrder.getPrice();
+			        Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
+
+			        // If the volume is bigger than the min volume, do the actual trade.
+			        if (buyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                    {
+
+			            // Compute the actual amount to trade.
+				        Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
+
+				        // Create a buy order...
+			            String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
+                                _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
+                        return orderBook.getOrder(orderId);
+                    }
+                    else
+                    {
+                        logger.info("amount you want to buy is lower than minimum!");
+                    }
+                }   
+                else
+                {
+                    logger.info("amount market can sell at this price is lower than minimum!");
+                }
+                return null;
+            }
+
+            private Order sellCurrency(Depth depth)
+            {
+                // Check, if there is an opportunity to sell some funds, and the volume of the order
+                // is higher than the minimum trading volume.
+
+                int buyOrders = depth.getBuySize();
+                int i = 0;
+                DepthOrder depthOrder = null;
+                Amount availableAmount = null;
+                do
+                {
+                    depthOrder = depth.getBuy(i++);
+                    availableAmount = depthOrder.getAmount();
+                }
+                while (i < buyOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);            
+
+                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                {
+		            // Now check, if we have any funds to sell.
+			        Amount sellAmount = new Amount(getFunds(currency));
+
+			        // If the volume is bigger than the min volume, do the actual trade.
+                    if (sellAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                    {
+
+                        // Compute the actual amount to trade.
+	                    Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
+
+	                    // Create a sell order...
+                        Price buyPrice = depthOrder.getPrice();
+		                String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
+                                _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
+                        return orderBook.getOrder(orderId);
+                    }
+                    else
+                    {
+                        logger.info("your funds to sell are lower than minimum!");
+                    }
+		        }
+                else
+                {
+                    logger.info("funds market can buy at this price are lower than minimum!");
+                }
+                return null;
+            }
+
+            private void reportCycleSummary()
+            {
+                logger.info(String.format("trend            |                                    [ %s ]       |", isTrendUp() ? "+" : "-"));
+                String macdSymbol;
+                if (order != null)
+                {
+                    logger.info(String.format("current deal     | %s", order));
+                    macdSymbol = "Macd";
+                }
+                else
+                {
+                    logger.info("current deal     |");
+                    macdSymbol = "macd";
                 }
                 if (lastDeal != null)
                 {
-                    logger.info(String.format("last deal | %s", lastDeal));
-                    logger.info(String.format(" \\-status | %s", lastDeal.getStatus()));
+                    logger.info(String.format("last deal        | %s", lastDeal));
+                    logger.info(String.format("     +-status    | %s", lastDeal.getStatus()));
+                    logger.info(String.format("     +-timestamp | %s", new Date(lastDeal.getTimestamp() / 1000)));
                 }
                 else
                 {
-                    logger.info("last deal |");
+                    logger.info("last deal        |");
                 }
-                logger.info(String.format("sma%3d    | %12f  = %12f = %12f", SMA_CYCLES, sma, sma, sma));
-                logger.info(String.format("sma%3d    | %12f* < %12f < %12f*", LONG_SMA_CYCLES, longSmaToSell, longSma, longSmaToBuy));
-                logger.info(String.format("buy       |                 %12f         ^       |", depth.getBuy(0).getPrice()));
-                logger.info(String.format("sell      |       ^         %12f                 |", depth.getSell(0).getPrice()));
-                logger.info(              "----------+---------------------------------------------+");
+                String priceTrend = macd.signum() > 0 ? "+" : "-";
+                String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
+                BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
+                BigDecimal currencyValue = getFunds(currency);
+                BigDecimal payCurrencyValue = getFunds(payCurrency);
+                BigDecimal buyPriceLessFee = buyPrice.multiply(BigDecimal.ONE.subtract(fee));
+                BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
+                BigDecimal absProfit = currentAssets.subtract(initialAssets);
+                BigDecimal profit = currentAssets.divide(initialAssets, MathContext.DECIMAL128);
+                double profitPercent = (profit.doubleValue() - 1) * 100;;
+                double profitPerDay = Math.pow(profit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
+                double profitPerMonth = Math.pow(profitPerDay, 30);
+
+                // reference profit (refProfit) is a virtual profit of sole investing in currency, without trading
+                // it is here for one to be able to compare bot work versus just leave currency intact
+                BigDecimal refProfit = buyPriceLessFee.divide(initialSellPrice, MathContext.DECIMAL128);
+                double refProfitPercent = (refProfit.doubleValue() - 1) * 100;
+                double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
+                double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
+
+                logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("initial ( %4s ) |                  %12s                  |", payCurrency, initialAssetsString));
+                logger.info(String.format("current ( %4s ) |                  %12s                  |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, absProfit.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit (%%)       |                    %+10.1f [   %+10.1f ] |", profitPercent, refProfitPercent));
+                logger.info(String.format("        +-day    |                    %+10.1f [   %+10.1f ] |", (profitPerDay - 1) * 100, (refProfitPerDay - 1) * 100));
+                logger.info(String.format("        +-month  |                    %+10.1f [   %+10.1f ] |", (profitPerMonth - 1) * 100, (refProfitPerMonth - 1) * 100));
+
+                logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.setScale(6, RoundingMode.CEILING)));
+                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.setScale(6, RoundingMode.CEILING)));
+                if (targetBuyPrice != null)
+                {
+                    logger.info(String.format("buy              | [ %12f ] %12f [ %12f ] |", stopLossPrice, buyPrice, targetBuyPrice));
+                }
+                else
+                {
+                    logger.info(String.format("buy              |                  %12f                  |", buyPrice));
+                }
+                logger.info(String.format("sell             |                  %12f                  |", sellPrice));
+                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_SHORT_INTERVAL, shortEma));
+                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_LONG_INTERVAL, longEma));
+                logger.info(String.format("%s             |                  %12f      [ %s ]       |", macdSymbol, macd, priceTrend));
+                logger.info(String.format("  +-prev         |                  %12f                  |", lastMacd));
+                logger.info(String.format("  +-delta        |                  %12f      [ %s ]       |", deltaMacd, macdTrend));
+                logger.info(              "-----------------+------------------------------------------------+");
+                lastMacd = macd;
             }
 
             private void sleepUntilNextCycle(long t1)
@@ -426,65 +769,6 @@ public class MaBot implements TradeBot {
 	    _updateThread.start();  // Start the update thread.
     }
     
-    private Order buyCurrency(Depth depth)
-    {
-        // Check, if there is an opportunity to buy something, and the volume of the
-		// order is higher than the minimum trading volume.
-
-        DepthOrder depthOrder = depth.getSell(0);
-        Amount availableAmount = depthOrder.getAmount();
- 		if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-        {
-		    // Now check, if we have any funds to buy something.
-            Price sellPrice = depthOrder.getPrice();
-			Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
-
-			// If the volume is bigger than the min volume, do the actual trade.
-			if (buyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-            {
-
-			    // Compute the actual amount to trade.
-				Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
-
-				// Create a buy order...
-			    String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
-                        _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
-		        return orderBook.getOrder(orderId);
-            }
-        }        
-        return null;
-    }
-
-    private Order sellCurrency(Depth depth)
-    {
-        // Check, if there is an opportunity to sell some funds, and the volume of the order
-        // is higher than the minimum trading volume.
-        // 
-        DepthOrder depthOrder = depth.getBuy(0);
-        Amount availableAmount = depthOrder.getAmount();
-        if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-        {
-		    // Now check, if we have any funds to sell.
-			Amount sellAmount = new Amount(getFunds(currency));
-
-			// If the volume is bigger than the min volume, do the actual trade.
-            if (sellAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
-            {
-
-                // Compute the actual amount to trade.
-	            Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
-
-	            // Create a sell order...
-                Price buyPrice = depthOrder.getPrice();
-		        String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
-                       _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
-                return orderBook.getOrder(orderId);
-            }
-		}
-        return null;
-    }
-
-
     /**
      * Stop the bot.
      */
