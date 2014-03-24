@@ -36,8 +36,8 @@ public enum CurrencyImpl implements Currency {
      * The values for the minimal currency implementation.
      */
     ALP, AMC, ANC, BET, BQC, BTC, CGB, CIN, CNC, CNY, COL, CRC, DEM, DGC, DOGE, DTC, DVC, ELC, ELP, EMD, EUR
-	, FRC, FRK, FTC, GBP, GDC, GLC, IFC, I0C, IXC, KGC, LTC, MEC, NAN, NET, NMC, NRB, NVC, ORB, PLN, PPC
-	, PTS, QRK, REC, RED, RUC, RUR, SBC, SPT, TAG, TRC, UNO, USD, WDC, XNC, XPM, ZET;
+	, FRC, FRK, FTC, GBP, GDC, GLC, IFC, I0C, IXC, KGC, LTC, MEC, MMC, NAN, NET, NMC, NOBL, NRB, NVC, NXT, ORB, PLN, PPC
+	, PTS, QRK, REC, RED, RUC, RUR, SBC, SOC, SPT, TAG, TRC, UNO, USD, USDE, WDC, XNC, XPM, ZET;
 
 
     // Methods

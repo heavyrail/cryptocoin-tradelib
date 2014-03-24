@@ -190,7 +190,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     /**
      * BTC-E api info url
      */
-    private static final String API_URL_INFO = "https://poloniex.com/api/3/info";
+    private static final String API_URL_INFO = "https://" + DOMAIN + "/public?command=returnTicker";
 
 
     // Constructors
@@ -242,12 +242,11 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 			List<CurrencyPairImpl> currencyPairs = new ArrayList<CurrencyPairImpl>();
 			JSONObject jsonResult = JSONObject.fromObject( requestResult);
 
-			Iterator itPairs = ((JSONObject)jsonResult.get("pairs")).keys();
+			Iterator itPairs = ((JSONObject) jsonResult).keys();
 			String pair;
 			String currency;
 			String paymentCurrency;
 			String[] currencyDetail = new String[2];
-			String pairFee;
 			CurrencyImpl currencyObject;
 			CurrencyImpl paymentCurrencyObject;
 			CurrencyPairImpl currencyPair;
@@ -264,8 +263,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 				currencyPairs.add(currencyPair);
 				
 				//update the fees for currency pairs trades
-				pairFee = jsonResult.getJSONObject("pairs").getJSONObject(pair).getString("fee");
-				currencyPairFeeTrade.put(currencyPair, new BigDecimal(pairFee).multiply(new BigDecimal("0.01")));
+				currencyPairFeeTrade.put(currencyPair, new BigDecimal("0.002"));
 			}
 			_supportedCurrencyPairs = (CurrencyPairImpl []) currencyPairs.toArray(new CurrencyPairImpl[currencyPairs.size()]);
 			return true;
