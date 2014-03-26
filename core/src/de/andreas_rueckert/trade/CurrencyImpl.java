@@ -35,10 +35,31 @@ public enum CurrencyImpl implements Currency {
     /**
      * The values for the minimal currency implementation.
      */
-    ALP, AMC, ANC, BET, BQC, BTC, CGB, CIN, CNC, CNY, COL, CRC, DEM, DGC, DOGE, DTC, DVC, ELC, ELP, EMD, EUR
-	, FRC, FRK, FTC, GBP, GDC, GLC, IFC, I0C, IXC, KGC, LTC, MEC, MMC, NAN, NET, NMC, NOBL, NRB, NVC, NXT, ORB, PLN, PPC
-	, PTS, QRK, REC, RED, RUC, RUR, SBC, SOC, SPT, TAG, TRC, UNO, USD, USDE, WDC, XNC, XPM, ZET;
-
+    AIR, ALP, AMC, ANC, APH, AUR,
+    BC, BET, BONES, BQC, BTC, BTCS,
+    CACH, CASH, CGA, CGB, CIN, CNC, CNOTE, CNY, COL, CON, CORG, CRC,
+    DEM, DGC, DIEM, DIME, DOGE, DRK, DTC, DVC,
+    EAC, EBT, ECC, EFL, ELC, ELP, EMC2, EMD, EMO, ETOK, EUR, EXE,
+    FAC, FLAP, FLT, FOX, FRC, FRK, FRQ, FTC, FZ,
+    GBP, GDC, GLB, GLC, GNS, GRC,
+    HIC, HUC, HVC,
+    ICN, IFC, I0C, IXC,
+    KDC, KGC,
+    LEAF, LTC,
+    MAX, MINT, MEC, MEOW, MMC, MRC, MTS, MYR, MZC,
+    NAN, NET, NMC, NOBL, NRB, NRS, NVC, NXT,
+    OLY, ORB,
+    PAND, PAWN, PIG, PLN, PMC, PPC, PRC, PTS,
+    Q2C, QRK,
+    REC, RED, REDD, RIC, RUC, RUR,
+    SBC, SMC, SOC, SPA, SPT, SUN, SXC,
+    TAG, TRC,
+    UNO, USD, USDE, UTC,
+    VTC,
+    WDC, WIKI, WOLF,
+    XCP, XNC, XPM,
+    YANG, YIN,
+    ZET;
 
     // Methods
 
