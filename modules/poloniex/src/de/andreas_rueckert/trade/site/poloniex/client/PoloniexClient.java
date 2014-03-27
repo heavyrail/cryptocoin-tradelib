@@ -352,7 +352,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    arguments = new HashMap<String, String>();
 	}
 	
-	arguments.put( "method", method);  // Add the method to the post data.
+	arguments.put( "command", method);  // Add the method to the post data.
 	arguments.put( "nonce",  "" + ++_nonce);  // Add the dummy nonce.
 
 	// Convert the arguments into a string to post them.
@@ -424,11 +424,10 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		JSONObject jsonResult = JSONObject.fromObject( requestResult);
 
 		// Check, if the request was successful
-		int success = jsonResult.getInt( "success");
+        System.out.println(postData);
+		//int success = jsonResult.getInt( "success");
 
-        System.out.println(postData + " " + success);
-
-		if( success == 0) {  // The request failed.
+		/*if( success == 0) {  // The request failed.
 		    String errorMessage = jsonResult.getString( "error");
             LogUtils.getInstance().getLogger().error( "poloniex.com trade API request failed: " + errorMessage);
             if (retryOnFail && errorMessage.indexOf("nonce") != -1) // if nonce is bad and we are allowed to retry request... 
@@ -447,10 +446,11 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
                 return null;
             }
 
-		} else {  // Request succeeded!
+		} else*/ {  // Request succeeded!
             retryOnFail = true;         // this request has been successful,
                                         // however next one will be allowed to retry should it fails
-		    return jsonResult.getJSONObject( "return");
+		    //return jsonResult.getJSONObject( "return");
+            return jsonResult;
 		}
 
 	    } catch( JSONException je) {
@@ -819,21 +819,21 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     public Collection<TradeSiteAccount> getAccounts( TradeSiteUserAccount userAccount) {
 
 	// Try to get some info on the user (including the current funds).
-	JSONObject jsonResponse = authenticatedHTTPRequest( "getInfo", null, userAccount);
+	JSONObject jsonResponse = authenticatedHTTPRequest( "returnBalances", null, userAccount);
 
 	if( jsonResponse != null) {
 
-	    JSONObject jsonFunds = jsonResponse.getJSONObject( "funds");  // Get the JSONObject for the funds.
+	    //JSONObject jsonFunds = jsonResponse.getJSONObject( "funds");  // Get the JSONObject for the funds.
 
 	    // An array for the parsed funds.
 	    ArrayList<TradeSiteAccount> result = new ArrayList<TradeSiteAccount>();
 
 	    // Now iterate over all the currencies in the funds.
-	    for( Iterator currencyIterator = jsonFunds.keys(); currencyIterator.hasNext(); ) {
+	    for( Iterator currencyIterator = jsonResponse.keys(); currencyIterator.hasNext(); ) {
 		
 		String currentCurrency = (String)currencyIterator.next();  // Get the next currency.
 		
-		BigDecimal balance = new BigDecimal( jsonFunds.getString( currentCurrency));  // Get the balance for this currency.
+		BigDecimal balance = new BigDecimal( jsonResponse.getString( currentCurrency));  // Get the balance for this currency.
 
 		result.add( new TradeSiteAccountImpl( balance, CurrencyImpl.findByString( currentCurrency.toUpperCase()), this));
 	    }
@@ -1008,9 +1008,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    throw new CurrencyNotSupportedException( "Currency pair: " + currencyPair.toString() + " is currently not supported on Poloniex");
 	}
 
-	String url = "https://" + DOMAIN + "/api/2/" 
-	    + getCurrencyPairString( currencyPair) 
-	    + "/depth";
+	String url = "https://" + DOMAIN + "/public?command=returnOrderBook&currencyPair=" 
+	    + getCurrencyPairString(currencyPair);
 
 	String requestResult = HttpUtils.httpGet( url);
 

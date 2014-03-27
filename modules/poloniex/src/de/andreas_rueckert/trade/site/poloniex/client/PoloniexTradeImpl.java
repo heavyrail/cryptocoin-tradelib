@@ -67,7 +67,6 @@ public class PoloniexTradeImpl extends CryptoCoinTradeImpl {
         DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
         Date date = dateFormat.parse(jsonTrade.getString("date") + " GMT");
 	    _timestamp = date.getTime() * 1000L;
-        System.out.println(_timestamp);
 	} catch( Exception e) {
 	    throw new NumberFormatException( "Date is not in a proper format");
 	}

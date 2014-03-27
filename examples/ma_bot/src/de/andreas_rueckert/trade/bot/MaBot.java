@@ -189,7 +189,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("BTC<=>LTC");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("BTC<=>DOGE");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -376,9 +376,12 @@ public class MaBot implements TradeBot {
                     long startTime = timeUtils.getCurrentGMTTimeMicros() - MACD_EMA_INTERVAL_MICROS;
                     long timeFrame = MACD_EMA_INTERVAL_MICROS + EMA_LONG_INTERVAL_MICROS;
                     Trade [] trades = provider.getTrades(_tradeSite, _tradedCurrencyPair, timeFrame);
+                    System.out.println(trades.length);
+                    System.out.println((startTime - timeFrame) + "..." + startTime);
                     logger.info("filling MACD cache");
                     for (int i = MACD_EMA_INTERVALS_NUM - 1; i >= 0; i--)
                     {
+                        System.out.println(i);
                         shortEma = analyzer.ema(trades, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
                         longEma = analyzer.ema(trades, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
                         updateMacdSignals(shortEma, longEma, startTime);
