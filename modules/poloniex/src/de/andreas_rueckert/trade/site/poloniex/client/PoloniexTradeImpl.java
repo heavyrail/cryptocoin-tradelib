@@ -34,7 +34,9 @@ import de.andreas_rueckert.trade.TradeType;
 import de.andreas_rueckert.util.LogUtils;
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
-
+import java.util.Date;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
 /**
  * This class implements a cryptocoin trade on the poloniex trade site.
@@ -62,15 +64,17 @@ public class PoloniexTradeImpl extends CryptoCoinTradeImpl {
 
 	// Parse the date.
 	try {
-	    // poloniex seems to have only the date as seconds.
-	    _timestamp = jsonTrade.getLong( "timestamp") * 1000000;
-	} catch( JSONException je) {
-	    throw new NumberFormatException( "Date is not a proper long variable");
+        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
+        Date date = dateFormat.parse(jsonTrade.getString("date") + " GMT");
+	    _timestamp = date.getTime() * 1000L;
+        System.out.println(_timestamp);
+	} catch( Exception e) {
+	    throw new NumberFormatException( "Date is not in a proper format");
 	}
 
 	// Parse the price
 	try {
-	    _price = new Price( jsonTrade.getString( "price"));
+	    _price = new Price( jsonTrade.getString( "rate"));
 	} catch( JSONException je) {
 	    throw new NumberFormatException( "Price is not in proper decimal format");
 	}
@@ -83,16 +87,16 @@ public class PoloniexTradeImpl extends CryptoCoinTradeImpl {
 	}
 
 	// Parse the id
-	try {
+	/*try {
 	    _id = jsonTrade.getString( "tid");
 	} catch( JSONException je) {
 	    LogUtils.getInstance().getLogger().error( "Cannot parse id in Poloniex trade");
-	}
+	}*/
 	
 	// Parse the trade type
 	String typeString = jsonTrade.getString( "type");
 
-	_type = typeString.equalsIgnoreCase( "bid" ) ? TradeType.Buy : TradeType.Sell;
+	_type = typeString.equalsIgnoreCase( "buy" ) ? TradeType.Buy : TradeType.Sell;
     }
 
     // Methods

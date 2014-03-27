@@ -189,7 +189,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("LTC<=>USD");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("BTC<=>LTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();

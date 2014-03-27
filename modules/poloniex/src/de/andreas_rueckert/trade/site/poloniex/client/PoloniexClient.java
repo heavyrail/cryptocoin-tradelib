@@ -201,7 +201,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	public PoloniexClient() {
 		super();
 
-		_name = "BTCe";
+		_name = "Poloniex";
 		_url = "https://poloniex.com/";
 
 		
@@ -415,7 +415,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	} 
 	
 	// Now do the actual request
-	String requestResult = HttpUtils.httpPost( "https://" + DOMAIN + "/tapi", headerLines, postData);
+	String requestResult = HttpUtils.httpPost( "https://" + DOMAIN + "/tradingApi", headerLines, postData);
 
 	if( requestResult != null) {   // The request worked
 
@@ -425,6 +425,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 
 		// Check, if the request was successful
 		int success = jsonResult.getInt( "success");
+
+        System.out.println(postData + " " + success);
 
 		if( success == 0) {  // The request failed.
 		    String errorMessage = jsonResult.getString( "error");
@@ -920,7 +922,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @return The currency pair as a poloniex string.
      */
     private String getCurrencyPairString( CurrencyPair currencyPair) {
-	return currencyPair.getCurrency().getName().toLowerCase() + "_" + currencyPair.getPaymentCurrency().getName().toLowerCase();
+	return currencyPair.getCurrency().getName().toUpperCase() + "_" + currencyPair.getPaymentCurrency().getName().toUpperCase();
     }
 
     /**
@@ -1359,9 +1361,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    throw new CurrencyNotSupportedException( "Currency pair: " + currencyPair.toString() + " is currently not supported on Poloniex");
 	}
 
-	String url = "https://" + DOMAIN + "/api/3/trades/" 
-	    + getCurrencyPairString( currencyPair)
-	    + "/?limit=2000";
+	String url = "https://" + DOMAIN + "/public?command=returnTradeHistory&currencyPair=" 
+	    + getCurrencyPairString( currencyPair);
 
 	// System.out.println( "Fetching poloniex trades from: " + url);
 
@@ -1401,7 +1402,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	if( requestResult != null) {  // If the HTTP request worked ok.
 	    try {
 		// Convert the result to an JSON array.
-		JSONArray resultArray = JSONObject.fromObject( requestResult).getJSONArray(getCurrencyPairString(currencyPair));
+		JSONArray resultArray = JSONArray.fromObject( requestResult);
 		
 		// Iterate over the array and convert each trade from json to a Trade object.
 		for( int i = 0; i < resultArray.size(); i++) {
