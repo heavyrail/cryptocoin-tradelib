@@ -57,7 +57,7 @@ public enum CurrencyImpl implements Currency {
     UNO, USD, USDE, UTC,
     VTC,
     WDC, WIKI, WOLF,
-    XCP, XNC, XPM,
+    XCP, XNC, XPM, XSV,
     YANG, YIN,
     ZET;
 
