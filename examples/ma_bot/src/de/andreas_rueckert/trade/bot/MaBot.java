@@ -80,12 +80,12 @@ public class MaBot implements TradeBot {
     /**
      * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.00098402");
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.02588412");
 
     /**
      * The maximum loss
      */
-    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.2");
+    private final static BigDecimal LOSS_TO_STOP = new BigDecimal("0.3");
 
     /**
      * The minimal trade volume.
@@ -97,15 +97,21 @@ public class MaBot implements TradeBot {
      */
     private final static int UPDATE_INTERVAL = 60;  // 60 seconds for now...
     
+    /* tune these 3 numbers! */
+    private final static int EMA_SHORT_INTERVALS_NUM = 12;
+    private final static int EMA_LONG_INTERVALS_NUM = 26;
     private final static int MACD_EMA_INTERVALS_NUM = 9;
+    
     private final static long MACD_EMA_TIME_PERIOD = 60L * 1000000L; // one minute - must correspond to next line!
     private final static long MACD_EMA_INTERVAL_MICROS = MACD_EMA_INTERVALS_NUM * MACD_EMA_TIME_PERIOD;
-    private final static String MACD_EMA_INTERVAL = Integer.toString(MACD_EMA_INTERVALS_NUM) + "m"; // 'm' means minute
+    // Magic below! add 1 (one) extra period to avoid edge effects while calculating MACD
+    // i.e. to calculate 9m-EMA of MACD we take 10m-interval for 9 MACD values to be guaranteedly included in the calculation
+    private final static String MACD_EMA_INTERVAL = Integer.toString(MACD_EMA_INTERVALS_NUM + 1) + "m"; // here and below 'm' means minute
     
-    private final static String EMA_SHORT_INTERVAL = "12m";
-    private final static long EMA_SHORT_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * 12;
-    private final static String EMA_LONG_INTERVAL = "26m";
-    private final static long EMA_LONG_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * 26;
+    private final static String EMA_SHORT_INTERVAL = EMA_SHORT_INTERVALS_NUM + "m";
+    private final static long EMA_SHORT_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * EMA_SHORT_INTERVALS_NUM;
+    private final static String EMA_LONG_INTERVAL = EMA_LONG_INTERVALS_NUM + "m";
+    private final static long EMA_LONG_INTERVAL_MICROS = MACD_EMA_TIME_PERIOD * EMA_LONG_INTERVALS_NUM;
 
     private final BigDecimal TWO = new BigDecimal("2");
     private final BigDecimal THOUSAND = new BigDecimal("1000");
@@ -300,13 +306,9 @@ public class MaBot implements TradeBot {
             BigDecimal macdSignalLine;
             BigDecimal lastMacd;
             BigDecimal deltaMacd;
+            BigDecimal relMacd;
             Price buyPrice;
             Price sellPrice;
-            //boolean shortEmaAbove;
-            //boolean upsideDown;
-            //boolean downsideUp;
-            boolean macdUpsideDown;
-            boolean macdDownsideUp;
             Order order;
             Order lastDeal;
             ChartAnalyzer analyzer;
@@ -381,7 +383,6 @@ public class MaBot implements TradeBot {
                         longEma = analyzer.ema(trades, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
                         updateMacdSignals(shortEma, longEma, startTime);
                         startTime += MACD_EMA_TIME_PERIOD;
-                        logger.info(shortEma.subtract(longEma) + " at " + new Date(lastDeal.getTimestamp() / 1000));
                     }
                     logger.info("MACD cache filled");
                     lastMacd = macd;
@@ -444,7 +445,8 @@ public class MaBot implements TradeBot {
                 {
                     macdCache.remove(0);
                 }
-                macdSignalLine = analyzer.ema((Trade []) macdCache.toArray(), MACD_EMA_INTERVAL);
+                Trade[] cache = macdCache.toArray(new Trade[0]);
+                macdSignalLine = analyzer.ema(cache, MACD_EMA_INTERVAL);
                 macd = macdLine.subtract(macdSignalLine);
             }
 
@@ -497,6 +499,7 @@ public class MaBot implements TradeBot {
                 shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                 longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                 updateMacdSignals(shortEma, longEma, timeUtils.getCurrentGMTTimeMicros());                
+                relMacd = macd.divide(meanPrice, MathContext.DECIMAL128).multiply(THOUSAND);
                 deltaMacd = macd.subtract(lastMacd);
                
                 /* should a short EMA rise too high above target buy price, move stop loss up too */
@@ -505,13 +508,6 @@ public class MaBot implements TradeBot {
                     stopLossPrice = sellPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
                     logger.info("*** Stop Loss Adjusted ***");
                 }
-
-                /*boolean newShortEmaAbove =  shortEma.compareTo(longEma) > 0; 
-                downsideUp = !shortEmaAbove && newShortEmaAbove;
-                upsideDown = shortEmaAbove && shortEma.compareTo(longEma) < 0;
-                shortEmaAbove = newShortEmaAbove;*/
-                macdUpsideDown = lastMacd.signum() > 0 && macd.signum() < 0;
-                macdDownsideUp = lastMacd.signum() < 0 && macd.signum() > 0;
             }
 
             private void doTrade()
@@ -533,15 +529,8 @@ public class MaBot implements TradeBot {
                 }                
             }
 
-            /*private boolean isTrendDown()
-            /{
-                //return macdUpsideDown || (macd.signum() < 0 && deltaMacd.signum() < 0);
-                return macd.signum() < 0;
-            }*/
-
             private boolean isTrendUp()
             {
-                //return macdDownsideUp || (macd.signum() > 0 && deltaMacd.signum() > 0);
                 return macd.signum() > 0;
             }
 
@@ -678,7 +667,7 @@ public class MaBot implements TradeBot {
 
             private void reportCycleSummary()
             {
-                logger.info(String.format("trend            |                                    [ %s ]       |", isTrendUp() ? "+" : "-"));
+                //logger.info(String.format("trend            |                                    [ %s ]       |", isTrendUp() ? "+" : "-"));
                 String macdSymbol;
                 if (order != null)
                 {
@@ -700,7 +689,8 @@ public class MaBot implements TradeBot {
                 {
                     logger.info("last deal        |");
                 }
-                String priceTrend = macd.signum() > 0 ? "+" : "-";
+                //String priceTrend = macd.signum() > 0 ? "+" : "-";
+                String priceTrend = isTrendUp() ? "+" : "-";
                 String macdTrend = deltaMacd.signum() > 0 ? "+" : "-";
                 BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
                 BigDecimal currencyValue = getFunds(currency);
@@ -741,7 +731,9 @@ public class MaBot implements TradeBot {
                 logger.info(String.format("sell             |                  %12f                  |", sellPrice));
                 logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_SHORT_INTERVAL, shortEma));
                 logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_LONG_INTERVAL, longEma));
-                logger.info(String.format("%s             |                  %12f      [ %s ]       |", macdSymbol, macd, priceTrend));
+                logger.info(String.format("macd-line        |                  %12f                  |", macdLine));
+                logger.info(String.format("macd-signal      |                  %12f                  |", macdSignalLine));
+                logger.info(String.format("%s             | [ %12f ] %12f      [ %s ]       |", macdSymbol, relMacd, macd, priceTrend));
                 logger.info(String.format("  +-prev         |                  %12f                  |", lastMacd));
                 logger.info(String.format("  +-delta        |                  %12f      [ %s ]       |", deltaMacd, macdTrend));
                 logger.info(              "-----------------+------------------------------------------------+");
