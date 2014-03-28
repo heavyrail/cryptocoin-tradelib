@@ -65,6 +65,7 @@ import java.io.IOException;
 import java.io.File;
 
 import de.andreas_rueckert.trade.site.btc_e.client.BtcEClient;
+import de.andreas_rueckert.trade.site.poloniex.client.PoloniexClient;
 import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
 import de.andreas_rueckert.persistence.PersistentProperty;
@@ -98,9 +99,9 @@ public class MaBot implements TradeBot {
     private final static int UPDATE_INTERVAL = 60;  // 60 seconds for now...
     
     /* tune these 3 numbers! */
-    private final static int EMA_SHORT_INTERVALS_NUM = 12;
-    private final static int EMA_LONG_INTERVALS_NUM = 26;
-    private final static int MACD_EMA_INTERVALS_NUM = 9;
+    private final static int EMA_SHORT_INTERVALS_NUM = 12 * 3;
+    private final static int EMA_LONG_INTERVALS_NUM = 26 * 3;
+    private final static int MACD_EMA_INTERVALS_NUM = 9 * 3;
     
     private final static long MACD_EMA_TIME_PERIOD = 60L * 1000000L; // one minute - must correspond to next line!
     private final static long MACD_EMA_INTERVAL_MICROS = MACD_EMA_INTERVALS_NUM * MACD_EMA_TIME_PERIOD;
@@ -189,7 +190,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("BTC<=>DOGE");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("KDC<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -234,7 +235,7 @@ public class MaBot implements TradeBot {
     /**
      * Get a property value from this bot.
      *
-     * @param propertyName The name of the property.
+     /* @param propertyName The name of the property.
      *
      * @return The value of this property as a String object, or null if it's an unknown property.
      */
@@ -363,6 +364,10 @@ public class MaBot implements TradeBot {
                     else
                     {
                         fee = _tradeSite.getFeeForTrade();
+                    }
+                    if (_tradeSite instanceof PoloniexClient)
+                    {
+                        ((PoloniexClient) _tradeSite).setCurrencyPair(_tradedCurrencyPair);
                     }
                     BigDecimal doubleFee = fee.add(fee);
                     BigDecimal feeSquared = fee.multiply(fee, MathContext.DECIMAL128);
@@ -713,32 +718,38 @@ public class MaBot implements TradeBot {
                 double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
                 double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
 
-                logger.info(String.format("days uptime      |                  %12s                  |", uptimeDays.setScale(3, RoundingMode.CEILING)));
-                logger.info(String.format("initial ( %4s ) |                  %12s                  |", payCurrency, initialAssetsString));
-                logger.info(String.format("current ( %4s ) |                  %12s                  |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
-                logger.info(String.format("profit ( %4s )  |                  %12s                  |", payCurrency, absProfit.setScale(8, RoundingMode.CEILING)));
-                logger.info(String.format("profit (%%)       |                    %+10.1f [   %+10.1f ] |", profitPercent, refProfitPercent));
-                logger.info(String.format("        +-day    |                    %+10.1f [   %+10.1f ] |", (profitPerDay - 1) * 100, (refProfitPerDay - 1) * 100));
-                logger.info(String.format("        +-month  |                    %+10.1f [   %+10.1f ] |", (profitPerMonth - 1) * 100, (refProfitPerMonth - 1) * 100));
+                logger.info(String.format("days uptime      |                   %12s                 |", uptimeDays.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("initial ( %4s ) |                   %12s                 |", payCurrency, initialAssetsString));
+                logger.info(String.format("current ( %4s ) |                   %12s                 |", payCurrency, currentAssets.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit ( %4s )  |                   %12s                 |", payCurrency, absProfit.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("profit (%%)       |                     %+10.1f     %+10.1f* |", profitPercent, refProfitPercent));
+                logger.info(String.format("        +-day    |                     %+10.1f     %+10.1f* |", (profitPerDay - 1) * 100, (refProfitPerDay - 1) * 100));
+                logger.info(String.format("        +-month  |                     %+10.1f     %+10.1f* |", (profitPerMonth - 1) * 100, (refProfitPerMonth - 1) * 100));
 
-                logger.info(String.format("%3s              |                  %12s                  |", currency, currencyValue.setScale(6, RoundingMode.CEILING)));
-                logger.info(String.format("%3s              |                  %12s                  |", payCurrency, payCurrencyValue.setScale(6, RoundingMode.CEILING)));
+                logger.info(String.format("%4s             |               %16s                 |", currency, currencyValue.setScale(8, RoundingMode.CEILING)));
+                logger.info(String.format("%4s             |               %16s                 |", payCurrency, payCurrencyValue.setScale(8, RoundingMode.CEILING)));
                 if (targetBuyPrice != null)
                 {
-                    logger.info(String.format("buy              | [ %12f ] %12f [ %12f ] |", stopLossPrice, buyPrice, targetBuyPrice));
+                    logger.info(String.format("buy              | %14s  %14s  %14s |",
+                                stopLossPrice.setScale(8, RoundingMode.CEILING).toPlainString(),
+                                buyPrice.setScale(8, RoundingMode.CEILING).toPlainString(),
+                                targetBuyPrice.setScale(8, RoundingMode.CEILING).toPlainString()));
                 }
                 else
                 {
-                    logger.info(String.format("buy              |                  %12f                  |", buyPrice));
+                    logger.info(String.format("buy              |                 %14s                 |", buyPrice.setScale(8, RoundingMode.CEILING).toPlainString()));
                 }
-                logger.info(String.format("sell             |                  %12f                  |", sellPrice));
-                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_SHORT_INTERVAL, shortEma));
-                logger.info(String.format("ema-%3s          |                  %12f                  |", EMA_LONG_INTERVAL, longEma));
-                logger.info(String.format("macd-line        |                  %12f                  |", macdLine));
-                logger.info(String.format("macd-signal      |                  %12f                  |", macdSignalLine));
-                logger.info(String.format("%s             | [ %12f ] %12f      [ %s ]       |", macdSymbol, relMacd, macd, priceTrend));
-                logger.info(String.format("  +-prev         |                  %12f                  |", lastMacd));
-                logger.info(String.format("  +-delta        |                  %12f      [ %s ]       |", deltaMacd, macdTrend));
+                logger.info(String.format("sell             |                 %14s                 |", sellPrice.setScale(8, RoundingMode.CEILING).toPlainString()));
+                logger.info(String.format("ema-%3s          |                 %14f                 |", EMA_SHORT_INTERVAL, shortEma));
+                logger.info(String.format("ema-%3s          |                 %14f                 |", EMA_LONG_INTERVAL, longEma));
+                logger.info(String.format("macd-line        |                 %14f                 |", macdLine));
+                logger.info(String.format("macd-signal      |                 %14f                 |", macdSignalLine));
+                logger.info(String.format("%s             |  [%12f] %14s     [ %s ]       |", macdSymbol, relMacd,
+                            macd.setScale(12, RoundingMode.CEILING), priceTrend));
+                logger.info(String.format("  +-prev         |                 %14s                 |",
+                            lastMacd.setScale(12, RoundingMode.CEILING)));
+                logger.info(String.format("  +-delta        |                 %14s     [ %s ]       |",
+                            deltaMacd.setScale(12, RoundingMode.CEILING), macdTrend));
                 logger.info(              "-----------------+------------------------------------------------+");
                 lastMacd = macd;
             }

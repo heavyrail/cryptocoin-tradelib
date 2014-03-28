@@ -183,10 +183,10 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     private String _secret = null;
     
     /**
-     * Map for fee trades
-     */
-    private Map<CurrencyPair, BigDecimal> currencyPairFeeTrade = new HashMap<CurrencyPair, BigDecimal>();
-    
+     *      * The traded currency pair.
+     *           */
+    CurrencyPair _tradedCurrencyPair;
+
     /**
      * BTC-E api info url
      */
@@ -207,9 +207,9 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		
 		// Define the supported currency pairs for this trading site.
 		initSupportedCurrencyPairs();
-		System.out.println(currencyPairFeeTrade);
+		//System.out.println(currencyPairFeeTrade);
 
-		setCurrentCurrency( CurrencyImpl.USD);
+		setCurrentCurrency( CurrencyImpl.BTC);
 
 		// Create a new parser for the poloniex.com website.
 		_htmlParser = new PoloniexHtmlParser( this);
@@ -237,7 +237,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	public boolean updateSupportedCurrencyPairs() {
 		String requestResult = HttpUtils.httpGet(API_URL_INFO);
 		if( requestResult != null) {
-			currencyPairFeeTrade = new HashMap<CurrencyPair, BigDecimal>();
 			//update the supported currency pairs
 			List<CurrencyPairImpl> currencyPairs = new ArrayList<CurrencyPairImpl>();
 			JSONObject jsonResult = JSONObject.fromObject( requestResult);
@@ -255,15 +254,15 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 				pair = (String) current;
 				//format is btc_usd, nvc_usd, ftc_btc, etc...
 				currencyDetail = pair.split("_");
-				currency = currencyDetail[0].toUpperCase();
-				paymentCurrency = currencyDetail[1].toUpperCase();
+				currency = currencyDetail[1].toUpperCase();
+				paymentCurrency = currencyDetail[0].toUpperCase();
 				currencyObject = CurrencyImpl.findByString(currency);
 				paymentCurrencyObject = CurrencyImpl.findByString(paymentCurrency);
 				currencyPair = new CurrencyPairImpl(currencyObject, paymentCurrencyObject);
 				currencyPairs.add(currencyPair);
 				
 				//update the fees for currency pairs trades
-				currencyPairFeeTrade.put(currencyPair, new BigDecimal("0.002"));
+				//currencyPairFeeTrade.put(currencyPair, new BigDecimal("0.002"));
 			}
 			_supportedCurrencyPairs = (CurrencyPairImpl []) currencyPairs.toArray(new CurrencyPairImpl[currencyPairs.size()]);
 			return true;
@@ -295,18 +294,12 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		_supportedCurrencyPairs[16] = new CurrencyPairImpl( CurrencyImpl.FTC, CurrencyImpl.BTC);
 		_supportedCurrencyPairs[17] = new CurrencyPairImpl( CurrencyImpl.XPM, CurrencyImpl.BTC);
 		
-		//fees for trades
-		String fee;
-		for (CurrencyPair currencyPair : _supportedCurrencyPairs) {
-			fee = "0.2";
-			if (currencyPair.getCurrency().equals(CurrencyImpl.USD)
-					&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.RUR)) {
-				fee = "0.5";
-			}
-			currencyPairFeeTrade.put(currencyPair, new BigDecimal(fee));
-		}
 	}
 
+    public void setCurrencyPair(CurrencyPair currencyPair)
+    {
+        _tradedCurrencyPair = currencyPair;
+    }
 
     // Methods
 
@@ -415,6 +408,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	} 
 	
 	// Now do the actual request
+    System.out.println(headerLines);
+    System.out.println(postData);
 	String requestResult = HttpUtils.httpPost( "https://" + DOMAIN + "/tradingApi", headerLines, postData);
 
 	if( requestResult != null) {   // The request worked
@@ -518,24 +513,15 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    // The parameters for the HTTP post call.
 	    HashMap<String, String> parameter = new HashMap<String, String>();
 	    
-	    parameter.put( "type", order.getOrderType() == OrderType.BUY ? "buy" : "sell");  // Indicate buy or sell.
 	    parameter.put( "amount", formatAmount( order.getAmount()));
 	    parameter.put( "rate", formatPrice( order.getPrice(), order.getCurrencyPair()));
 	   
-	    /*
-	    int currencyPairId = getIdForCurrencies( order.getCurrencyPair());
-	    
-	    if( currencyPairId == -1) {
-		throw new CurrencyNotSupportedException( "This currency pair is not supported in poloniex orders: " 
-							 + order.getCurrencyPair().getCurrency().toString() 
-							 + " and payment in "
-							 + order.getCurrencyPair().getPaymentCurrency());
-							 } 
-	    */
-	    
-	    parameter.put( "pair", order.getCurrencyPair().getCurrency().getName().toLowerCase() + "_" + order.getCurrencyPair().getPaymentCurrency().getName().toLowerCase());  
+	    parameter.put( "currencyPair", 
+                order.getCurrencyPair().getPaymentCurrency().getName().toUpperCase() + "_" +
+                order.getCurrencyPair().getCurrency().getName().toUpperCase());  
 
-	    JSONObject jsonResponse = authenticatedHTTPRequest( "Trade", parameter, order.getTradeSiteUserAccount());
+	    JSONObject jsonResponse = authenticatedHTTPRequest(
+                order.getOrderType() == OrderType.BUY ? "buy" : "sell", parameter, order.getTradeSiteUserAccount());
 
 	    if( jsonResponse == null) {
 		return OrderStatus.ERROR;
@@ -543,106 +529,21 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
         //TODO remove in production
         System.out.println(jsonResponse);
 		// Try to get and store the site id for the order first, so we can access the order later.
-		long poloniexOrderId = jsonResponse.getLong( "order_id");
+		long poloniexOrderId = jsonResponse.getLong( "orderNumber");
 
 		order.setSiteId( "" + poloniexOrderId);  // Store the id in the order.
 
-		double remains = jsonResponse.getDouble( "remains");
-		    
-		// Set a new status for this order.
-		order.setStatus( remains == 0.0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED);
+        order.setStatus(OrderStatus.FILLED);
 
 		return order.getStatus();
 	    }
 	} else if( orderType == OrderType.DEPOSIT) {  // This is a deposit order..
 
-	    DepositOrder depositOrder = (DepositOrder)order;
-
-	    // Get the deposited currency from the order.
-	    Currency depositedCurrency = depositOrder.getCurrency();
-
-	    // Check, if this currency is supported yet in this implementation.
-	    if( depositedCurrency.equals( CurrencyImpl.BTC)
-		|| depositedCurrency.equals( CurrencyImpl.LTC)) {
-
-		// Get the address for a deposit from the trade site.
-		String depositAddress = getDepositAddress( depositedCurrency);
-
-		// Attach a new account for depositing to this order.
-		depositOrder.setAccount( new CryptoCoinAccountImpl( depositAddress
-								    , new BigDecimal( "0")
-								    , depositedCurrency));
-
-		// Now return a new order status to indicate, that the order was modified.
-		return OrderStatus.DEPOSIT_ADDRESS_GENERATED;
-
-	    } else {  // This currency is not supported yet.
-		
-		throw new CurrencyNotSupportedException( "Depositing the currency " 
-							 + depositedCurrency 
-							 + " is not supported yet in this implementation");
-
-	    }
+	    throw new NotYetImplementedException( "Executing deposits is not yet implemented for " + this.getName());
 
 	} else if( orderType == OrderType.WITHDRAW) {  // This is a withdraw order.
-
-	    // Just to avoid multiple typecasts all over the code here...
-	    WithdrawOrder withdrawOrder = (WithdrawOrder)order;
-
-	    // For now, make sure that we withdraw to a cryptocoin address
-	    if( ! ( withdrawOrder.getAccount() instanceof CryptoCoinAccount)) {
-		
-		throw new CurrencyNotSupportedException( "Can only withdraw to a cryptocoin account at the moment");
-	    }
-
-	    // Get a cryptocoin address for the account to withdraw to...
-	    String cryptocoinAddress = ((CryptoCoinAccount)(withdrawOrder.getAccount())).getCryptoCoinAddress();
-
-	    // Get the coin id for the given currency to withdraw
-	    short coin_id = getIdForCurrency( withdrawOrder.getCurrency());
-
-	    // It's practically a translation of the following jquery code:
-	    // function withdraw_coin(a){
-	    //   var b=$("#sum").val(),c=$("#address").val(),d=$("#token").val();
-	    //   showLoader();
-	    //    $.post(domain+aF+"coins.php",{act:"withdraw",sum:b,address:c,coin_id:a,token:d},function(a){nPopReady(430,70);$("#nPopupCon").html(a);hideLoader()})}
-
-	    String url = "https://" + PoloniexClient.DOMAIN + "/coins.php";
-
-	    ensureLogin();  // Make sure, that the user is logged in.
 	    
-	    if( _customerId == null) {
-		throw new MissingPoloniexCustomerIdException( "getFunds: no customer id received from the poloniex.com website.");
-	    }
-	
-	    if( _currentCookies == null) {
-		throw new MissingPoloniexCookieException( "No current poloniex.com cookie for getFunds! Please login to get one!");
-	    }
-
-	    try {
-		// Now post the actual withdrar request.
-		Response response = Jsoup.connect( url)
-		    .data( "act", "withdraw"                   // The parameters for the request.
-			   , "sum", withdrawOrder.getAmount().toString()
-			   , "address", cryptocoinAddress
-			   , "coin_id", "" + coin_id
-			   , "token", _currentToken)
-		    .method( Method.POST)
-		    .cookies( _currentCookies)
-		    .userAgent( USERAGENT)
-		    .timeout( TIMEOUT)
-		    .execute();
-
-		// Check, if the response code signals success.
-		// There might be ways to detail out the error, but for now I can live with this binary response...
-		return response.statusCode() == 200 ? OrderStatus.FILLED : OrderStatus.ERROR;
-		
-	    } catch( IOException ioe) {
-
-		LogUtils.getInstance().getLogger().error( "Cannot post profile request to the poloniex.com website: " + ioe.toString());
-	    }
-	    
-	    // throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
+	    throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
 	}
 
 	return null;  // An error occured, or this is an unknow order type?
@@ -675,138 +576,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	 * @param currencyPair The currency pair to trade.
 	 */
 	private final String formatPrice( BigDecimal price, CurrencyPair currencyPair) {
-
-		if( currencyPair.getCurrency().equals( CurrencyImpl.BTC) 
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.USD)) {
-
-			// btc has only 3 fraction digits for usd.
-			DecimalFormat btcDecimalFormat = new DecimalFormat("#####.###", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return btcDecimalFormat.format( price);
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.BTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.RUR)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.BTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.EUR)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.LTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.LTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.USD)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.LTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.RUR)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.LTC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.EUR)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.###", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.NMC)
-				&& currencyPair.getPaymentCurrency().equals( CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.NMC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.USD)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.###", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.NVC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.NVC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.USD)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.###", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.USD)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.RUR)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.EUR)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.USD)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.TRC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.PPC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.PPC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.USD)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.###", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.FTC)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		} else if( currencyPair.getCurrency().equals( CurrencyImpl.XPM)
-				&& currencyPair.getPaymentCurrency().equals(CurrencyImpl.BTC)) {
-
-			DecimalFormat nmcDecimalFormat = new DecimalFormat("#####.#####", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-			return nmcDecimalFormat.format( price); 
-
-		}
-		else {
-			throw new CurrencyNotSupportedException( "The currency pair " + currencyPair.getName() + " is not supported in formatPrice()");
-		}
+        DecimalFormat f = new DecimalFormat("########.########", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
+        return f.format(price);
 	}
 
     /**
@@ -922,7 +693,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @return The currency pair as a poloniex string.
      */
     private String getCurrencyPairString( CurrencyPair currencyPair) {
-	return currencyPair.getCurrency().getName().toUpperCase() + "_" + currencyPair.getPaymentCurrency().getName().toUpperCase();
+	return currencyPair.getPaymentCurrency().getName().toUpperCase() + "_" + currencyPair.getCurrency().getName().toUpperCase();
     }
 
     /**
@@ -1077,8 +848,9 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @return The fee in the resulting currency (currency value for buy, payment currency value for sell).
      */
     public synchronized Price getFeeForOrder( SiteOrder order) {
-	
-	if( order instanceof WithdrawOrder) {
+	    return new Price((new BigDecimal("0.002")).multiply(order.getAmount()), order.getCurrencyPair().getCurrency());
+
+	/*if( order instanceof WithdrawOrder) {
 
 	    if( order.getCurrencyPair().getCurrency().equals( CurrencyImpl.BTC)) {
 		return new Price( "0.01");  // Withdrawal in btc seem to cost always 0.01 btc ?
@@ -1111,61 +883,12 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	} else {  // Just the default implementation for the other order forms.
 
 	    return super.getFeeForOrder( order);
-	}
+	}*/
     }
     
-    /**
-     * Gets the fee for a currency pair trade, 
-     * @param the fee
-     * @return
-     */
-    public BigDecimal getFeeForCurrencyPairTrade(CurrencyPair pair) {
-    	for (CurrencyPair currencyPair : _supportedCurrencyPairs) {
-			if (currencyPair.getCurrency().equals(pair.getCurrency()) 
-					&& currencyPair.getPaymentCurrency().equals(pair.getPaymentCurrency())) {
-				return currencyPairFeeTrade.get(currencyPair);
-			}
-		}
-    	return null;
+    public BigDecimal getFeeForTrade() {
+        return new BigDecimal("0.002");
     }
-
-    /**
-     * Get id for a pair of currencies.
-     * Look at http://bitcoin.stackexchange.com/questions/1393/does-poloniex-have-an-api-for-alternate-currencies
-     * for more info.
-     *
-     * @param currency The first currency to trade.
-     * @param paymentCurrency The currency to use for payment.
-     *
-     * @return The id for this currency pair, or -1 if the id is not known.
-     */
-    /*    private short getIdForCurrencies( PoloniexCurrency currency, PoloniexCurrency paymentCurrency) {
-
-	if( paymentCurrency == PoloniexCurrency.BTC) {
-	    switch( currency) {
-	    case IXC: return 2;
-	    case I0C: return 4;
-	    case SC: return 5;
-	    case GG: return 7;
-	    case TBX: return 8;
-	    case FBX: return 9;
-	    case LTC: return 10;
-	    case RUC: return 11;
-	    case NMC: return 13;
-	    case CLC: return 15;
-	    case DVC: return 16;
-	    }
-	} else if( paymentCurrency == PoloniexCurrency.USD) {
-	    switch( currency){
-	    case BTC: return 1;
-	    case SC: return 6;
-	    case RUC: return 12;
-	    case LTC: return 14;
-	    }
-	}
-
-	return -1;
-	} */
 
     /**
      * Get id for a pair of currencies.
@@ -1239,10 +962,15 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	// Set the parameters for the order list request.
 	Map< String, String> parameters = new HashMap< String, String>();
 
-	parameters.put( "active", "1");  // This is actually the default anyway, but it can't hurt...
+    parameters.put( "currencyPair", _tradedCurrencyPair.getPaymentCurrency().getName().toUpperCase() + "_" +
+            _tradedCurrencyPair.getCurrency().getName().toUpperCase());
+    System.out.println(parameters.get("currencyPair"));
 
 	// Try to get some info on the open orders.
-	JSONObject jsonResponse = authenticatedHTTPRequest( "OrderList", parameters, userAccount);
+
+    JSONObject rawResponse = authenticatedHTTPRequest("returnOpenOrders", parameters, userAccount);
+    System.out.println(rawResponse);
+	JSONArray jsonResponse = JSONArray.fromObject(rawResponse);
 
 	if( jsonResponse != null) {  // If the request succeeded.
 
@@ -1250,10 +978,10 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    ArrayList<SiteOrder> result = new ArrayList<SiteOrder>();
 
 	    // The answer is an assoc array with the site id's as the key and a json object with order details as the values.
-	    for( Iterator keyIterator = jsonResponse.keys(); keyIterator.hasNext(); ) {
+	    for( Iterator iterator = jsonResponse.iterator(); iterator.hasNext(); ) {
 
 		// Get the next site id from the iterator.
-		String currentSiteId = (String)( keyIterator.next());
+		String currentSiteId = ((JSONObject) iterator.next()).getString("orderNumber");
 
 		// Since we know the tradesite and the site id now, we can query the order book for the order.
 		SiteOrder currentOrder = CryptoCoinOrderBook.getInstance().getOrder( this, currentSiteId);

@@ -55,6 +55,7 @@
             <fileset dir="${lib}">
                 <include name="*.jar"/>
                 <include name="ext/cryptocoin-tradelib-btc_e-0.1.0.jar"/>
+                <include name="ext/cryptocoin-tradelib-poloniex-0.1.0.jar"/>
             </fileset>
             <!--<fileset dir="${java.libs}">
                 <include name="commons-lang-2.6.jar"/>

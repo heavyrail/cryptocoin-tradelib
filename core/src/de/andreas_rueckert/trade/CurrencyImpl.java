@@ -41,7 +41,7 @@ public enum CurrencyImpl implements Currency {
     DEM, DGC, DIEM, DIME, DOGE, DRK, DTC, DVC,
     EAC, EBT, ECC, EFL, ELC, ELP, EMC2, EMD, EMO, ETOK, EUR, EXE,
     FAC, FLAP, FLT, FOX, FRC, FRK, FRQ, FTC, FZ,
-    GBP, GDC, GLB, GLC, GNS, GRC,
+    GBP, GDC, GLB, GLC, GNS, GPUC, GRC,
     HIC, HUC, HVC,
     ICN, IFC, I0C, IXC,
     KDC, KGC,
