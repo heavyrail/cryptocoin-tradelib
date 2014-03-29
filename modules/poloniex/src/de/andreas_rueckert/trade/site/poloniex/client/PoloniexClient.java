@@ -100,7 +100,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     /**
      * The domain of the service.
      */
-    public static String DOMAIN = "poloniex.com";
+    public static String DOMAIN = "www.poloniex.com";
 
     /**
      * This is just a dummy, since poloniex fails with nonce=currentTimeMicros() and
