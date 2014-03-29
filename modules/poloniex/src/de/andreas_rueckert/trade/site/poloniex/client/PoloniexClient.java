@@ -408,56 +408,41 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	} 
 	
 	// Now do the actual request
-    System.out.println(headerLines);
-    System.out.println(postData);
 	String requestResult = HttpUtils.httpPost( "https://" + DOMAIN + "/tradingApi", headerLines, postData);
 
-	if( requestResult != null) {   // The request worked
+	if( requestResult != null) 
+    {   // The request worked
 
-	    try {
+	    try 
+        {
 		// Convert the HTTP request return value to JSON to parse further.
-		JSONObject jsonResult = JSONObject.fromObject( requestResult);
-
-		// Check, if the request was successful
-        System.out.println(postData);
-		//int success = jsonResult.getInt( "success");
-
-		/*if( success == 0) {  // The request failed.
-		    String errorMessage = jsonResult.getString( "error");
-            LogUtils.getInstance().getLogger().error( "poloniex.com trade API request failed: " + errorMessage);
-            if (retryOnFail && errorMessage.indexOf("nonce") != -1) // if nonce is bad and we are allowed to retry request... 
-            {
-                retryOnFail = false; // before we retry, disable retryOnFail to prevent endless retry
-                String leftPart = errorMessage.split(",")[0]; // extract nonce from response
-                int nonceIdx = leftPart.indexOf("key:") + 4;
-                String trueNonce = leftPart.substring(nonceIdx);
-                _nonce = Long.parseLong(trueNonce);
-                LogUtils.getInstance().getLogger().error( "oh no! bad nonce... hold on, we are to increment it and retry");
-                return authenticatedHTTPRequest(method, arguments, userAccount); // recursively call the method to retry
-            }
-            else
-            {
-                retryOnFail = true; // ensure retry capability in now on, no matter what state it was before
-                return null;
-            }
-
-		} else*/ {  // Request succeeded!
-            retryOnFail = true;         // this request has been successful,
-                                        // however next one will be allowed to retry should it fails
-		    //return jsonResult.getJSONObject( "return");
+		    JSONObject jsonResult = JSONObject.fromObject(requestResult);
             return jsonResult;
-		}
-
-	    } catch( JSONException je) {
-		System.err.println( "Cannot parse json request result: " + je.toString());
-
-        retryOnFail = true;
-        return null;  // An error occured...
-	    }
-	} 
-
-    retryOnFail = true;
-	return null;  // The request failed.
+        }
+        catch (JSONException e)
+        {
+            try
+            {
+                JSONObject finalResult = new JSONObject();
+                JSONArray jsonResult = JSONArray.fromObject(requestResult);
+                System.out.println(jsonResult);
+                for (Iterator it = jsonResult.iterator(); it.hasNext(); ) 
+                {
+                    JSONObject record = (JSONObject) it.next();
+                    String keyField = record.names().getString(0);
+                    String id = record.getString(keyField);
+                    finalResult.put(id, record);
+                }
+                return finalResult;
+            }
+            catch (JSONException je)
+            {
+		        System.err.println( "Cannot parse json request result: " + je.toString());
+                return null;  // An error occured...
+            }
+        }
+    }
+    return null;
     }
 
     /**
@@ -968,26 +953,24 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 
 	// Try to get some info on the open orders.
 
-    JSONObject rawResponse = authenticatedHTTPRequest("returnOpenOrders", parameters, userAccount);
-    System.out.println(rawResponse);
-	JSONArray jsonResponse = JSONArray.fromObject(rawResponse);
+    JSONObject jsonResponse = authenticatedHTTPRequest("returnOpenOrders", parameters, userAccount);
 
 	if( jsonResponse != null) {  // If the request succeeded.
 
-	    // Create a buffer for the result.
-	    ArrayList<SiteOrder> result = new ArrayList<SiteOrder>();
+        // Create a buffer for the result.
+        ArrayList<SiteOrder> result = new ArrayList<SiteOrder>();
 
-	    // The answer is an assoc array with the site id's as the key and a json object with order details as the values.
-	    for( Iterator iterator = jsonResponse.iterator(); iterator.hasNext(); ) {
+        // The answer is an assoc array with the site id's as the key and a json object with order details as the values.
+        for( Iterator keyIterator = jsonResponse.keys(); keyIterator.hasNext(); ) {
 
-		// Get the next site id from the iterator.
-		String currentSiteId = ((JSONObject) iterator.next()).getString("orderNumber");
+        // Get the next site id from the iterator.
+        String currentSiteId = (String)( keyIterator.next());
 
-		// Since we know the tradesite and the site id now, we can query the order book for the order.
-		SiteOrder currentOrder = CryptoCoinOrderBook.getInstance().getOrder( this, currentSiteId);
+        // Since we know the tradesite and the site id now, we can query the order book for the order.
+        SiteOrder currentOrder = CryptoCoinOrderBook.getInstance().getOrder( this, currentSiteId);
 
-		if( currentOrder != null) {     // If the order book returned an order,
-		    result.add( currentOrder);  // add it to the result buffer.
+        if( currentOrder != null) {     // If the order book returned an order,
+            result.add( currentOrder);  // add it to the result buffer.
 		} else {  // It seems, this order is not in the order book. I can consider this an error at the moment,
 		          // since every order should go through the order book.
 

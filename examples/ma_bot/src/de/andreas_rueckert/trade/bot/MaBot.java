@@ -91,7 +91,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.1");
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.01");
 
     /**
      * The interval to update the bot activities.
@@ -190,7 +190,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("KDC<=>BTC");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("CGA<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
