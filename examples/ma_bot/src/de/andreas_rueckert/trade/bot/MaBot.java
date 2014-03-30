@@ -319,7 +319,8 @@ public class MaBot implements TradeBot {
             BigDecimal sellFactor;
             BigDecimal stopLossFactor;
             BigDecimal takeProfitFactor;
-            BigDecimal oldCurrencyAmount;
+            //BigDecimal oldCurrencyAmount;
+            //BigDecimal oldPaymentCurrencyAmount;
             String pendingOrderId;
 
             /**
@@ -462,6 +463,7 @@ public class MaBot implements TradeBot {
             {
                 if (pendingOrderId != null) 
                 {
+                    Order pendingOrder = orderBook.getOrder(pendingOrderId);
                     if (!orderBook.isCompleted(pendingOrderId))
                     {
                         logger.info("cancelling order on hold");
@@ -471,7 +473,7 @@ public class MaBot implements TradeBot {
                         }
                     }
 
-                    /*Order pendingOrder = orderBook.getOrder(pendingOrderId);
+                    /*
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
                     if (pendingOrderResult != OrderStatus.UNKNOWN) 
                     {
@@ -537,14 +539,14 @@ public class MaBot implements TradeBot {
                 order = null;
                 if (isTimeToBuy()) 
                 {
-                    oldCurrencyAmount = getFunds(currency);
-                    oldPaymentCurrencyAmount = getFunds(paymentCurrency);
+                    //oldCurrencyAmount = getFunds(currency);
+                    //oldPaymentCurrencyAmount = getFunds(paymentCurrency);
  			        order = buyCurrency(depth);
                 }
                 else if (isStopLoss() || isMinProfit()) 
                 {
-                    oldCurrencyAmount = getFunds(currency);
-                    oldPaymentCurrencyAmount = getFunds(paymentCurrency);
+                    //oldCurrencyAmount = getFunds(currency);
+                    //oldPaymentCurrencyAmount = getFunds(paymentCurrency);
 	                order = sellCurrency(depth); 
                 }
                 if (order != null && order.getStatus() != OrderStatus.ERROR)
