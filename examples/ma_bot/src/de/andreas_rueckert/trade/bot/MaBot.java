@@ -783,11 +783,11 @@ public class MaBot implements TradeBot {
                 logger.info(String.format("macd-line        |                 %14f                 |", macdLine));
                 logger.info(String.format("macd-signal      |                 %14f                 |", macdSignalLine));
                 logger.info(String.format("%s             |  [%7f]   %10s     [ %s ]       |", macdSymbol, relMacd,
-                            macd.setScale(12, RoundingMode.CEILING), priceTrend));
-                logger.info(String.format("  +-prev         |                 %10s                 |",
-                            lastMacd.setScale(12, RoundingMode.CEILING)));
+                            macd.setScale(12, RoundingMode.CEILING).toPlainString(), priceTrend));
+                logger.info(String.format("  +-prev         |                 %10s                |",
+                            lastMacd.setScale(12, RoundingMode.CEILING).toPlainString()));
                 logger.info(String.format("  +-delta        |                 %10s     [ %s ]       |",
-                            deltaMacd.setScale(12, RoundingMode.CEILING), macdTrend));
+                            deltaMacd.setScale(12, RoundingMode.CEILING).toPlainString(), macdTrend));
                 logger.info(              "-----------------+------------------------------------------------+");
                 lastMacd = macd;
             }

@@ -42,7 +42,7 @@ public enum CurrencyImpl implements Currency {
     EAC, EBT, ECC, EFL, ELC, ELP, EMC2, EMD, EMO, ETOK, EUR, EXE,
     FAC, FLAP, FLT, FOX, FRC, FRK, FRQ, FTC, FZ,
     GBP, GDC, GLB, GLC, GNS, GPUC, GRC,
-    HIC, HUC, HVC,
+    H20, HIC, HUC, HVC,
     ICN, IFC, I0C, IXC,
     KDC, KGC,
     LEAF, LTC,
@@ -81,8 +81,16 @@ public enum CurrencyImpl implements Currency {
      *
      * @return A CurrencyImpl object or null, if no matching constant was found.
      */
-    public static CurrencyImpl findByString( String currencyString) {
-	return CurrencyImpl.valueOf( currencyString);
+    public static CurrencyImpl findByString(String currencyString) 
+    {
+	    try 
+        {
+            return CurrencyImpl.valueOf(currencyString);
+        }
+        catch (IllegalArgumentException e)
+        {
+            return null;
+        }
     }
 
     /**

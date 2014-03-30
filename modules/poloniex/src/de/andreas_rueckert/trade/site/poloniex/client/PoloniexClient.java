@@ -258,11 +258,11 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 				paymentCurrency = currencyDetail[0].toUpperCase();
 				currencyObject = CurrencyImpl.findByString(currency);
 				paymentCurrencyObject = CurrencyImpl.findByString(paymentCurrency);
-				currencyPair = new CurrencyPairImpl(currencyObject, paymentCurrencyObject);
-				currencyPairs.add(currencyPair);
-				
-				//update the fees for currency pairs trades
-				//currencyPairFeeTrade.put(currencyPair, new BigDecimal("0.002"));
+                if (currencyObject != null && paymentCurrencyObject != null)
+                {
+				    currencyPair = new CurrencyPairImpl(currencyObject, paymentCurrencyObject);
+				    currencyPairs.add(currencyPair);
+                }
 			}
 			_supportedCurrencyPairs = (CurrencyPairImpl []) currencyPairs.toArray(new CurrencyPairImpl[currencyPairs.size()]);
 			return true;
