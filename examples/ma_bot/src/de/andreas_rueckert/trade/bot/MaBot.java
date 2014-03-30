@@ -190,7 +190,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("CGA<=>BTC");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("DRK<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -472,6 +472,21 @@ public class MaBot implements TradeBot {
                             pendingOrderId = null;
                         }
                     }
+                    else
+                    {
+                        pendingOrderId = null;
+                        lastDeal = pendingOrder;
+                        lastPrice = pendingOrder.getPrice();
+                        if (pendingOrder.getOrderType() == OrderType.BUY)
+                        {
+                            stopLossPrice = lastPrice.multiply(stopLossFactor);
+                            targetBuyPrice = lastPrice.multiply(sellFactor);
+                        }
+                        else
+                        {
+                            // TODO
+                        }
+                    }
 
                     /*
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
@@ -519,10 +534,12 @@ public class MaBot implements TradeBot {
    	            depth = provider.getDepth(_tradeSite, _tradedCurrencyPair);
                 buyPrice = depth.getBuy(0).getPrice();
                 sellPrice = depth.getSell(0).getPrice();
+                System.out.println("div1");
                 BigDecimal meanPrice = buyPrice.add(sellPrice).divide(TWO, MathContext.DECIMAL128);
                 shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
                 longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
                 updateMacdSignals(shortEma, longEma, timeUtils.getCurrentGMTTimeMicros());                
+                System.out.println("div2");
                 relMacd = macd.divide(meanPrice, MathContext.DECIMAL128).multiply(THOUSAND);
                 deltaMacd = macd.subtract(lastMacd);
                
@@ -693,7 +710,6 @@ public class MaBot implements TradeBot {
 
             private void reportCycleSummary()
             {
-                //logger.info(String.format("trend            |                                    [ %s ]       |", isTrendUp() ? "+" : "-"));
                 String macdSymbol;
                 if (order != null)
                 {
@@ -724,15 +740,19 @@ public class MaBot implements TradeBot {
                 BigDecimal buyPriceLessFee = buyPrice.multiply(BigDecimal.ONE.subtract(fee));
                 BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
                 BigDecimal absProfit = currentAssets.subtract(initialAssets);
+                System.out.println("div3");
                 BigDecimal profit = currentAssets.divide(initialAssets, MathContext.DECIMAL128);
-                double profitPercent = (profit.doubleValue() - 1) * 100;;
+                double profitPercent = (profit.doubleValue() - 1) * 100;
+                System.out.println("div4");
                 double profitPerDay = Math.pow(profit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
                 double profitPerMonth = Math.pow(profitPerDay, 30);
 
                 // reference profit (refProfit) is a virtual profit of sole investing in currency, without trading
                 // it is here for one to be able to compare bot work versus just leave currency intact
+                System.out.println("div5");
                 BigDecimal refProfit = buyPriceLessFee.divide(initialSellPrice, MathContext.DECIMAL128);
                 double refProfitPercent = (refProfit.doubleValue() - 1) * 100;
+                System.out.println("div6");
                 double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
                 double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
 
@@ -762,11 +782,11 @@ public class MaBot implements TradeBot {
                 logger.info(String.format("ema-%3s          |                 %14f                 |", EMA_LONG_INTERVAL, longEma));
                 logger.info(String.format("macd-line        |                 %14f                 |", macdLine));
                 logger.info(String.format("macd-signal      |                 %14f                 |", macdSignalLine));
-                logger.info(String.format("%s             |  [%12f] %14s     [ %s ]       |", macdSymbol, relMacd,
+                logger.info(String.format("%s             |  [%7f]   %10s     [ %s ]       |", macdSymbol, relMacd,
                             macd.setScale(12, RoundingMode.CEILING), priceTrend));
-                logger.info(String.format("  +-prev         |                 %14s                 |",
+                logger.info(String.format("  +-prev         |                 %10s                 |",
                             lastMacd.setScale(12, RoundingMode.CEILING)));
-                logger.info(String.format("  +-delta        |                 %14s     [ %s ]       |",
+                logger.info(String.format("  +-delta        |                 %10s     [ %s ]       |",
                             deltaMacd.setScale(12, RoundingMode.CEILING), macdTrend));
                 logger.info(              "-----------------+------------------------------------------------+");
                 lastMacd = macd;

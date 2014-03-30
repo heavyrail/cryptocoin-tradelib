@@ -425,7 +425,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
             {
                 JSONObject finalResult = new JSONObject();
                 JSONArray jsonResult = JSONArray.fromObject(requestResult);
-                System.out.println(jsonResult);
                 for (Iterator it = jsonResult.iterator(); it.hasNext(); ) 
                 {
                     JSONObject record = (JSONObject) it.next();
