@@ -462,12 +462,26 @@ public class MaBot implements TradeBot {
             {
                 if (pendingOrderId != null) 
                 {
-                    Order pendingOrder = orderBook.getOrder(pendingOrderId);
+                    if (!orderBook.isCompleted(pendingOrderId))
+                    {
+                        logger.info("cancelling order on hold");
+                        if (orderBook.cancelOrder(pendingOrder))
+                        {
+                            pendingOrderId = null;
+                        }
+                    }
+
+                    /*Order pendingOrder = orderBook.getOrder(pendingOrderId);
                     OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
                     if (pendingOrderResult != OrderStatus.UNKNOWN) 
                     {
-                        boolean amountChanged = oldCurrencyAmount != null && oldCurrencyAmount.compareTo(getFunds(currency)) != 0;
-                        if (!amountChanged)
+                        boolean tradeDone = 
+                                oldCurrencyAmount != null &&
+                                oldCurrencyAmount.compareTo(getFunds(currency)) != 0 &&
+                                oldPaymentCurrencyAmount != null &&
+                                oldPaymentCurrencyAmount.compareTo(getFunds(paymentCurrency)) != 0 
+                                
+                        if (!tradeDone)
                         {
                             logger.info("order has been executed, but nothing changed!");
                         }
@@ -494,7 +508,7 @@ public class MaBot implements TradeBot {
                                 pendingOrderId = null;
                             }
                         }
-                    }
+                    }*/
                 }                        
             }
             
@@ -524,11 +538,13 @@ public class MaBot implements TradeBot {
                 if (isTimeToBuy()) 
                 {
                     oldCurrencyAmount = getFunds(currency);
+                    oldPaymentCurrencyAmount = getFunds(paymentCurrency);
  			        order = buyCurrency(depth);
                 }
                 else if (isStopLoss() || isMinProfit()) 
                 {
                     oldCurrencyAmount = getFunds(currency);
+                    oldPaymentCurrencyAmount = getFunds(paymentCurrency);
 	                order = sellCurrency(depth); 
                 }
                 if (order != null && order.getStatus() != OrderStatus.ERROR)

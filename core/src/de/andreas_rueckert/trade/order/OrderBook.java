@@ -122,8 +122,12 @@ public abstract class OrderBook {
 			    }
 			}
 			
-			if (!orderIsStillOpen || currentOrder.getStatus() == OrderStatus.ERROR) {  // If the order is no longer open or it is in ERROR/null state (Ugly hack by P.P.)
-			    //currentOrder.setStatus( OrderStatus.FILLED);  // Set the order status to filled (Ugly hack by Andreas! commented out by P.P.)
+            OrderStatus currentStatus = currentOrder.getStatus();
+			if (!orderIsStillOpen || currentStatus == OrderStatus.ERROR) {  // If the order is no longer open or it is in ERROR/null state (Ugly hack by P.P.)
+			    if (currentStatus == OrderStatus.PARTIALLY_FILLED) // should the order was marked as partially filled...
+                {
+                    currentOrder.setStatus( OrderStatus.FILLED);  // ...set the order status to filled (Ugly hack by Andreas! modified by P.P.)
+                }
 			    _executedOrders.remove( currentOrder);        // Remove this order from the executed orders,
 			    _completedOrders.put( currentOrder.getId(), currentOrder);  // and add it to the completed orders.
 			}

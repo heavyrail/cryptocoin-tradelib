@@ -452,33 +452,36 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @return true, if the order was canceled. False otherwise.
      */
-    public boolean cancelOrder( SiteOrder order) {
+    public boolean cancelOrder(SiteOrder order) 
+    {
 
-	// The parameters for the HTTP post call.
-	HashMap<String, String> parameter = new HashMap<String, String>();
+	    // The parameters for the HTTP post call.
+	    HashMap<String, String> parameter = new HashMap<String, String>();
 
-	// Get the site id of this order.
-	String site_id =  order.getSiteId();
+	    // Get the site id of this order.
+	    String site_id = order.getSiteId();
 
-	// If there is no site id, we cannot cancel the order.
-	if( site_id == null) {
-	    return false;
-	}
+	    // If there is no site id, we cannot cancel the order.
+	    if (site_id == null) 
+        {
+	        return false;
+	    }
 	
-	parameter.put( "order_id", order.getSiteId());  // Pass the site id of the order.
+	    parameter.put("orderNumber", order.getSiteId());  // Pass the site id of the order.
+        parameter.put("currencyPair", _tradedCurrencyPair.getPaymentCurrency().getName().toUpperCase() + "_" +
+                _tradedCurrencyPair.getCurrency().getName().toUpperCase());
 
-	JSONObject jsonResponse = authenticatedHTTPRequest( "CancelOrder", parameter, order.getTradeSiteUserAccount());
+	    JSONObject jsonResponse = authenticatedHTTPRequest("cancelOrder", parameter, order.getTradeSiteUserAccount());
 
-	if( jsonResponse == null) {
-
-	    LogUtils.getInstance().getLogger().error( "No response from poloniex while attempting to cancel an order");
-
-	    return false;
-
-	} else {
-
-	    return true; // Ok!
-	}
+	    if (jsonResponse == null) 
+        {
+	        LogUtils.getInstance().getLogger().error("No response from poloniex while attempting to cancel an order");
+	        return false;
+    	} 
+        else
+        {
+	        return true; // Ok!
+	    }
     }
 
     /**
@@ -489,49 +492,47 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @return The new status of the order.
      */
-    public synchronized OrderStatus executeOrder( SiteOrder order) {
+    public synchronized OrderStatus executeOrder(SiteOrder order) 
+    {
+        OrderType orderType = order.getOrderType();  // Get the type of this order.
 
-	OrderType orderType = order.getOrderType();  // Get the type of this order.
+	    if ((orderType == OrderType.BUY) || ( orderType == OrderType.SELL)) 
+        {  // If this is a buy or sell order, run the trade code.
 
-	if( ( orderType == OrderType.BUY) || ( orderType == OrderType.SELL)) {  // If this is a buy or sell order, run the trade code.
-
-	    // The parameters for the HTTP post call.
-	    HashMap<String, String> parameter = new HashMap<String, String>();
+	        // The parameters for the HTTP post call.
+	        HashMap<String, String> parameter = new HashMap<String, String>();
 	    
-	    parameter.put( "amount", formatAmount( order.getAmount()));
-	    parameter.put( "rate", formatPrice( order.getPrice(), order.getCurrencyPair()));
-	   
-	    parameter.put( "currencyPair", 
-                order.getCurrencyPair().getPaymentCurrency().getName().toUpperCase() + "_" +
-                order.getCurrencyPair().getCurrency().getName().toUpperCase());  
+	        parameter.put("amount", formatAmount( order.getAmount()));
+	        parameter.put("rate", formatPrice( order.getPrice(), order.getCurrencyPair()));
+	        parameter.put("currencyPair", 
+                    order.getCurrencyPair().getPaymentCurrency().getName().toUpperCase() + "_" +
+                    order.getCurrencyPair().getCurrency().getName().toUpperCase());  
 
-	    JSONObject jsonResponse = authenticatedHTTPRequest(
-                order.getOrderType() == OrderType.BUY ? "buy" : "sell", parameter, order.getTradeSiteUserAccount());
+	        JSONObject jsonResponse = authenticatedHTTPRequest(
+                    order.getOrderType() == OrderType.BUY ? "buy" : "sell", parameter, order.getTradeSiteUserAccount());
 
-	    if( jsonResponse == null) {
-		return OrderStatus.ERROR;
-	    } else {
-        //TODO remove in production
-        System.out.println(jsonResponse);
-		// Try to get and store the site id for the order first, so we can access the order later.
-		long poloniexOrderId = jsonResponse.getLong( "orderNumber");
-
-		order.setSiteId( "" + poloniexOrderId);  // Store the id in the order.
-
-        order.setStatus(OrderStatus.FILLED);
-
-		return order.getStatus();
+	        if (jsonResponse == null) 
+            {
+		        return OrderStatus.ERROR;
+	        } 
+            else
+            {
+		        // Try to get and store the site id for the order first, so we can access the order later.
+		        long poloniexOrderId = jsonResponse.getLong("orderNumber");
+		        order.setSiteId("" + poloniexOrderId);  // Store the id in the order.
+                order.setStatus(OrderStatus.PARTIALLY_FILLED);
+		        return order.getStatus();
+	        }
+	    } 
+        else if (orderType == OrderType.DEPOSIT) 
+        {  // This is a deposit order..
+	        throw new NotYetImplementedException( "Executing deposits is not yet implemented for " + this.getName());
 	    }
-	} else if( orderType == OrderType.DEPOSIT) {  // This is a deposit order..
-
-	    throw new NotYetImplementedException( "Executing deposits is not yet implemented for " + this.getName());
-
-	} else if( orderType == OrderType.WITHDRAW) {  // This is a withdraw order.
-	    
-	    throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
-	}
-
-	return null;  // An error occured, or this is an unknow order type?
+        else if (orderType == OrderType.WITHDRAW) 
+        {  // This is a withdraw order.
+	        throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
+	    }
+	    return null;  // An error occured, or this is an unknow order type?
     }
 
     /**
@@ -539,14 +540,12 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * 
      * @param amount The amount to format.
      */
-    private final String formatAmount( BigDecimal amount) {
-
-	// The amount has always 8 fraction digits for now.
-	DecimalFormat amountFormat = new DecimalFormat( "#####.########", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
-
-	return amountFormat.format( amount);
+    private final String formatAmount(BigDecimal amount) 
+    {
+	    // The amount has always 8 fraction digits for now.
+	    DecimalFormat amountFormat = new DecimalFormat("#####.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+	    return amountFormat.format(amount);
     }
-
 
     /**
      * Format the price for a given currency pair.
@@ -554,14 +553,9 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @param price The price to format.
      * @param currencyPair The currency pair to trade.
      */
-	/**
-	 * Format the price for a given currency pair.
-	 *
-	 * @param price The price to format.
-	 * @param currencyPair The currency pair to trade.
-	 */
-	private final String formatPrice( BigDecimal price, CurrencyPair currencyPair) {
-        DecimalFormat f = new DecimalFormat("########.########", DecimalFormatSymbols.getInstance( Locale.ENGLISH));
+	private final String formatPrice( BigDecimal price, CurrencyPair currencyPair) 
+    {
+        DecimalFormat f = new DecimalFormat("########.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         return f.format(price);
 	}
 
@@ -942,46 +936,42 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @return The open orders as a collection, or null if the request failed.
      */
-    public Collection<SiteOrder> getOpenOrders( TradeSiteUserAccount userAccount) {
+    public Collection<SiteOrder> getOpenOrders(TradeSiteUserAccount userAccount) 
+    {
+	    // Set the parameters for the order list request.
+	    Map< String, String> parameters = new HashMap< String, String>();
+        parameters.put( "currencyPair", _tradedCurrencyPair.getPaymentCurrency().getName().toUpperCase() + "_" +
+                _tradedCurrencyPair.getCurrency().getName().toUpperCase());
 
-	// Set the parameters for the order list request.
-	Map< String, String> parameters = new HashMap< String, String>();
+    	// Try to get some info on the open orders.
+        JSONObject jsonResponse = authenticatedHTTPRequest("returnOpenOrders", parameters, userAccount);
+	    if (jsonResponse != null) 
+        {  // If the request succeeded.
+            // Create a buffer for the result.
+            ArrayList<SiteOrder> result = new ArrayList<SiteOrder>();
 
-    parameters.put( "currencyPair", _tradedCurrencyPair.getPaymentCurrency().getName().toUpperCase() + "_" +
-            _tradedCurrencyPair.getCurrency().getName().toUpperCase());
-    System.out.println(parameters.get("currencyPair"));
+            // The answer is an assoc array with the site id's as the key and a json object with order details as the values.
+            for (Iterator keyIterator = jsonResponse.keys(); keyIterator.hasNext(); ) 
+            {
+                // Get the next site id from the iterator.
+                String currentSiteId = (String) (keyIterator.next());
 
-	// Try to get some info on the open orders.
+                // Since we know the tradesite and the site id now, we can query the order book for the order.
+                SiteOrder currentOrder = CryptoCoinOrderBook.getInstance().getOrder(this, currentSiteId);
 
-    JSONObject jsonResponse = authenticatedHTTPRequest("returnOpenOrders", parameters, userAccount);
-
-	if( jsonResponse != null) {  // If the request succeeded.
-
-        // Create a buffer for the result.
-        ArrayList<SiteOrder> result = new ArrayList<SiteOrder>();
-
-        // The answer is an assoc array with the site id's as the key and a json object with order details as the values.
-        for( Iterator keyIterator = jsonResponse.keys(); keyIterator.hasNext(); ) {
-
-        // Get the next site id from the iterator.
-        String currentSiteId = (String)( keyIterator.next());
-
-        // Since we know the tradesite and the site id now, we can query the order book for the order.
-        SiteOrder currentOrder = CryptoCoinOrderBook.getInstance().getOrder( this, currentSiteId);
-
-        if( currentOrder != null) {     // If the order book returned an order,
-            result.add( currentOrder);  // add it to the result buffer.
-		} else {  // It seems, this order is not in the order book. I can consider this an error at the moment,
+                if (currentOrder != null) 
+                {     // If the order book returned an order,
+                    result.add(currentOrder);  // add it to the result buffer.
+		        }
+                else
+                {  // It seems, this order is not in the order book. I can consider this an error at the moment,
 		          // since every order should go through the order book.
-
-		    throw new OrderNotInOrderBookException( "Error: poloniex order with site id " + currentSiteId + " is not in order book!");
-		}
-	    }
-
-	    return result;  // Return the buffer with the orders.	    
-	} 
-
-	return null;  // An error occured.
+		            throw new OrderNotInOrderBookException("Error: poloniex order with site id " + currentSiteId + " is not in order book!");
+		        }
+	        }
+	        return result;  // Return the buffer with the orders.	    
+	    } 
+	    return null;  // An error occured.
     }
 
     /**
