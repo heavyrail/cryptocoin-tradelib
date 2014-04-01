@@ -81,7 +81,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.02588412");
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.07588412");
 
     /**
      * The maximum loss
@@ -190,7 +190,7 @@ public class MaBot implements TradeBot {
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = CurrencyPairImpl.findByString("EFL<=>BTC");
+	_tradedCurrencyPair = CurrencyPairImpl.findByString("EMC2<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();

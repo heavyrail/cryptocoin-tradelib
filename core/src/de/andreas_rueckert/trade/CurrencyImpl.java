@@ -37,7 +37,7 @@ public enum CurrencyImpl implements Currency {
      */
     AIR, ALP, AMC, ANC, APH, AUR,
     BC, BET, BONES, BQC, BTC, BTCS,
-    CACH, CASH, CGA, CGB, CIN, CNC, CNOTE, CNY, COL, CON, CORG, CRC,
+    CACH, CASH, CGA, CGB, CIN, CNC, CNOTE, CNH, COL, CON, CORG, CRC,
     DEM, DGC, DIEM, DIME, DOGE, DRK, DTC, DVC,
     EAC, EBT, ECC, EFL, ELC, ELP, EMC2, EMD, EMO, ETOK, EUR, EXE,
     FAC, FLAP, FLT, FOX, FRC, FRK, FRQ, FTC, FZ,
