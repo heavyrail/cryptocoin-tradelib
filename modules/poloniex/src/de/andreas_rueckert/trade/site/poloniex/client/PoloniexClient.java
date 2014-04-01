@@ -542,7 +542,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     private final String formatAmount(BigDecimal amount) 
     {
 	    // The amount has always 8 fraction digits for now.
-	    DecimalFormat amountFormat = new DecimalFormat("#####.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+	    DecimalFormat amountFormat = new DecimalFormat("#########.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 	    return amountFormat.format(amount);
     }
 
@@ -552,9 +552,9 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @param price The price to format.
      * @param currencyPair The currency pair to trade.
      */
-	private final String formatPrice( BigDecimal price, CurrencyPair currencyPair) 
+	private final String formatPrice(BigDecimal price, CurrencyPair currencyPair) 
     {
-        DecimalFormat f = new DecimalFormat("########.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+        DecimalFormat f = new DecimalFormat("###.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         return f.format(price);
 	}
 
