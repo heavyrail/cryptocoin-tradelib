@@ -1,6 +1,6 @@
-<project name="Java cryptocoin tradelib moving averages bot example" default="dist" basedir=".">
+<project name="Java cryptocoin tradelib proxy bot example" default="dist" basedir=".">
     <description>
-        This bot demonstrates the use of the cryptocoin tradelib
+        This is Poloniex proxy bot; the bot provides MACD signals for all currencies
     </description>
 
     <!-- set global properties for this build -->
@@ -17,7 +17,7 @@
 
     <property name="java.libs" location="/usr/share/java"/>
 
-    <property name="bot.jarfile" location="${dist}/lib/ma_bot-${version}.jar"/>
+    <property name="bot.jarfile" location="${dist}/lib/pol_sign_bot-${version}.jar"/>
 
     <!-- end global properties -->
 
@@ -54,15 +54,8 @@
         <path id="run.classpath">
             <fileset dir="${lib}">
                 <include name="*.jar"/>
-                <include name="ext/cryptocoin-tradelib-btc_e-0.1.0.jar"/>
                 <include name="ext/cryptocoin-tradelib-poloniex-0.1.0.jar"/>
             </fileset>
-            <!--<fileset dir="${java.libs}">
-                <include name="commons-lang-2.6.jar"/>
-                <include name="commons-collections-2.1.1.jar"/>
-                <include name="commons-logging-1.1.3.jar"/>
-                <include name="ezmorph-1.0.6.jar"/>
-            </fileset>-->
         </path>
 
         <pathconvert property="manifest.classpath" pathsep=" ">
@@ -83,24 +76,17 @@
 
         <jar jarfile="${bot.jarfile}" basedir="${build}">
             <manifest>
-	            <attribute name="Main-Class" value="de.andreas_rueckert.trade.bot.ui.BotRunner"/>
+	            <attribute name="Main-Class" value="de.andreas_rueckert.trade.bot.PoloniexSignalBot"/>
                 <attribute name="Class-Path" value="${manifest.classpath}"/>
             </manifest>
         </jar>
     </target>
 
-    <target name="run-gui" depends="dist">
-        <java jar="${bot.jarfile}" fork="true"/>
-    </target>
-
     <target name="run" depends="dist">
-        <record name="mabot.log" action="start"/>
+        <record name="psbot.log" action="start"/>
         <java jar="${bot.jarfile}" fork="true">
-            <arg value="-server"/>
-            <arg value="-startbot"/>
-            <arg value="MaBot"/>
         </java>
-        <record name="mabot.log" action="stop"/>
+        <record name="psbot.log" action="stop"/>
     </target>
 
     <target name="clean" description="clean up" >
