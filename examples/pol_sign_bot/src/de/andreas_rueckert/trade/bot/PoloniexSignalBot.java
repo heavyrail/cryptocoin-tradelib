@@ -92,21 +92,16 @@ public class PoloniexSignalBot
     private static HashMap<String, TradeArchive> tradeArchives;
     private static HashMap<String, TradeArchive> macdArchives;
     private static ArrayList<Trade> macdCache;
-    private static Price shortEma;
-    private static Price longEma;
-    private static BigDecimal macd;
-    private static Price macdLine;
-    private static BigDecimal macdSignalLine;
-    private static BigDecimal lastMacd;
-    private static BigDecimal deltaMacd;
-    private static BigDecimal relMacd;
-    private static ChartAnalyzer analyzer;
-    private static ChartProvider provider;
     private static TimeUtils timeUtils;
     private static Logger logger;
     private static DecimalFormat priceFormat;
     private static DecimalFormat macdFormat;
-
+    private static DecimalFormat relMacdFormat;
+    private static ChartAnalyzer analyzer;
+    private static ChartProvider provider;
+    private static BigDecimal lastRelMacd;
+    private static File wwwRoot;
+   
     // Methods
     
     private static CurrencyPairImpl makeCurrencyPair(String pair)
@@ -147,7 +142,6 @@ public class PoloniexSignalBot
                     if (archive == null)
                     {
                         archive = new TradeArchive(EMA_LONG_INTERVALS_NUM);
-                        logger.info("initializing trade archive for " + currencyPair);
                         for (int i = 0; i < EMA_LONG_INTERVALS_NUM; i++)
                         {
                             archive.add(t);
@@ -159,15 +153,14 @@ public class PoloniexSignalBot
                         archive.add(t);
                     }
                     Trade trades[] = archive.toArray(new Trade[0]);
-                    shortEma = analyzer.ema(trades, EMA_SHORT_INTERVAL);
-                    longEma = analyzer.ema(trades, EMA_LONG_INTERVAL);
-                    macdLine = shortEma.subtract(longEma);
+                    Price shortEma = analyzer.ema(trades, EMA_SHORT_INTERVAL);
+                    Price longEma = analyzer.ema(trades, EMA_LONG_INTERVAL);
+                    Price macdLine = shortEma.subtract(longEma);
                     t = new SimpleTrade(macdLine, now);
                     TradeArchive macdArchive = macdArchives.get(pair);
                     if (macdArchive == null)
                     {
                         macdArchive = new TradeArchive(MACD_EMA_INTERVALS_NUM);
-                        logger.info("initializing macd cache for " + currencyPair);
                         for (int i = 0; i < MACD_EMA_INTERVALS_NUM; i++)
                         {
                             macdArchive.add(t);
@@ -180,11 +173,17 @@ public class PoloniexSignalBot
                     }
                     Trade[] macdCache = macdArchive.toArray(new Trade[0]);
                    
-                    macdSignalLine = analyzer.ema(macdCache, MACD_EMA_INTERVAL);
-                    macd = macdLine.subtract(macdSignalLine);
+                    Price macdSignalLine = analyzer.ema(macdCache, MACD_EMA_INTERVAL);
+                    Price macd = macdLine.subtract(macdSignalLine);
+                    BigDecimal relMacd = macd.divide(price, MathContext.DECIMAL128).multiply(THOUSAND);
+                    BigDecimal deltaRelMacd = relMacd.subtract(lastRelMacd);
+                    lastRelMacd = relMacd;
+
                     JSONArray pairInfo = new JSONArray();
                     pairInfo.add(priceFormat.format(price));
                     pairInfo.add(macdFormat.format(macd));
+                    pairInfo.add(relMacdFormat.format(relMacd));
+                    pairInfo.add(relMacdFormat.format(deltaRelMacd));
                     output.put(pair, pairInfo);
                     if (currencyPair.toString().equals("GRC<=>BTC") ||
                             currencyPair.toString().equals("EMC2<=>BTC") ||
@@ -192,13 +191,12 @@ public class PoloniexSignalBot
                             currencyPair.toString().equals("XCP<=>BTC"))
                     {
                         logger.info(currencyPair + " " + priceFormat.format(price) + " " + macdFormat.format(macd));
-                        logger.info("***");
                     }
                 }
             }
             try
             {
-                PrintWriter pw = new PrintWriter(WWW_ROOT + File.separator + "macd");
+                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "macd");
                 pw.println(output);
                 pw.flush();
             }
@@ -228,12 +226,18 @@ public class PoloniexSignalBot
 
     public static void main(String[] args)
     {
+        wwwRoot = new File(WWW_ROOT);
+        if (!wwwRoot.exists())
+        {
+            wwwRoot.mkdirs();
+        }
         try
         {
-            SimpleWebServer server = new SimpleWebServer(new File(WWW_ROOT), 54321);
+            new SimpleWebServer(wwwRoot, 54321);
         }
         catch (IOException e)
         {
+            logger.error(e);
         }
         tradeArchives = new HashMap<String, TradeArchive>();
         macdArchives = new HashMap<String, TradeArchive>();
@@ -243,6 +247,8 @@ public class PoloniexSignalBot
         timeUtils = TimeUtils.getInstance();
         priceFormat = new DecimalFormat("###0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         macdFormat = new DecimalFormat("+##0.00000000000;-##0.00000000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+        relMacdFormat = new DecimalFormat("+###.###;-###.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+        lastRelMacd = new BigDecimal("0");
         logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
         logger.info("PoloniexSignalBot started");
