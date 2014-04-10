@@ -121,9 +121,10 @@ public class PoloniexSignalBot
         }
     }
 
-    private static void updateTradeArchives() 
+    private static int updateTradeArchives() 
     {
         String requestResult = HttpUtils.httpGet(API_URL_INFO);
+        int result = 0;
         if (requestResult != null) 
         {
             JSONObject jsonResult = JSONObject.fromObject(requestResult);
@@ -193,6 +194,7 @@ public class PoloniexSignalBot
                         logger.info(currencyPair + " " + priceFormat.format(price) + " " + macdFormat.format(macd));
                     }
                 }
+                result++;
             }
             try
             {
@@ -205,12 +207,15 @@ public class PoloniexSignalBot
                 logger.error(e);
             }
         }
+        return result;
     }
 
-    private static void sleepUntilNextCycle(long t1)
+    private static void sleepUntilNextCycle(long t1, int numPairs)
     {
         long t2 = System.currentTimeMillis();
-        long sleepTime = (UPDATE_INTERVAL * 1000 - (t2 - t1)); 
+        long deltaT = t2 - t1;
+        logger.info("It took " + deltaT + " ms to analyze " + numPairs + " pairs. Now going to sleep...");
+        long sleepTime = (UPDATE_INTERVAL * 1000); 
         if (sleepTime > 0)
         {
 	        try 
@@ -262,12 +267,13 @@ public class PoloniexSignalBot
             */
             @Override public void run() 
             {
+                int numPairs = 0;
                 while (true) 
                 { 
                     long t1 = System.currentTimeMillis();
                     try
                     {
-                        updateTradeArchives();
+                        numPairs = updateTradeArchives();
                     }
                     catch (Exception e)
                     {
@@ -276,7 +282,7 @@ public class PoloniexSignalBot
                     }
                     finally
                     {
-                        sleepUntilNextCycle(t1);
+                        sleepUntilNextCycle(t1, numPairs);
                     } 
 		        }
 		    }
