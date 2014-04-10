@@ -83,6 +83,10 @@ public class PoloniexSignalBot
 
     private final static String DOMAIN = "www.poloniex.com";
     private final static String API_URL_INFO = "https://" + DOMAIN + "/public?command=returnTicker";
+    private final static String API_URL_VOL = "https://" + DOMAIN + "/public?command=return24hVolume";
+    //private final static String FRONT_PAGE_URL = "https://" + DOMAIN + "/exchange/";
+    //private final static String HOT_HTML_REGEXP = "<div style=\"border-color:rgb(20,100,40);\"id=\"market(.*)\"";
+
     private final static String WWW_ROOT = "./www";
 
     private final static BigDecimal THOUSAND = new BigDecimal("1000");
@@ -119,6 +123,40 @@ public class PoloniexSignalBot
         {
             return null;
         }
+    }
+
+    public static JSONArray sortJsonArray(JSONArray array, final String field)
+    {
+        List<JSONObject> jsons = new ArrayList<JSONObject>();
+        for (int i = 0; i < array.size(); i++)
+        {
+            jsons.add(array.getJSONObject(i));
+        }
+        Collections.sort(jsons, new Comparator<JSONObject>()
+        {
+            @Override
+            public int compare(JSONObject lhs, JSONObject rhs)
+            {
+                String lid = lhs.getString(field);
+                String rid = rhs.getString(field);
+                if (lid != null)
+                {
+                    if (rid == null)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return (new Double(lid)).compareTo(new Double(rid));
+                    }
+                }
+                else
+                {
+                    return -1;
+                }
+            }
+        });
+        return JSONArray.fromObject(jsons);
     }
 
     private static int updateTradeArchives() 
@@ -207,15 +245,16 @@ public class PoloniexSignalBot
                 logger.error(e);
             }
         }
-        return result;
+        return result;        
     }
 
     private static void sleepUntilNextCycle(long t1, int numPairs)
     {
-        long t2 = System.currentTimeMillis();
-        long deltaT = t2 - t1;
-        logger.info("It took " + deltaT + " ms to analyze " + numPairs + " pairs. Now going to sleep...");
-        long sleepTime = (UPDATE_INTERVAL * 1000); 
+        long deltaT = System.currentTimeMillis() - t1;
+        logger.info("It took " + deltaT + " ms to analyze " + numPairs + " pairs.");
+        logger.info("Now going to sleep...");
+        deltaT = System.currentTimeMillis() - t1;
+        long sleepTime = UPDATE_INTERVAL * 1000 - deltaT; 
         if (sleepTime > 0)
         {
 	        try 
@@ -274,6 +313,28 @@ public class PoloniexSignalBot
                     try
                     {
                         numPairs = updateTradeArchives();
+
+                    /*******/
+                        String requestResult = HttpUtils.httpGet(API_URL_INFO);
+                        int result = 0;
+                        if (requestResult != null)
+                        {
+                            JSONObject jsonResult = JSONObject.fromObject(requestResult);
+                            JSONArray output = sortJsonArray(jsonResult, "BTC");
+
+                            try
+                            {
+                                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "hot");
+                                pw.println(output);
+                                pw.flush();
+                            }
+                            catch (FileNotFoundException e)
+                            {
+                                logger.error(e);
+                            }
+                        }
+                    /*******/
+
                     }
                     catch (Exception e)
                     {
