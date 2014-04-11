@@ -60,7 +60,7 @@ import de.andreas_rueckert.persistence.PersistentProperty;
 import de.andreas_rueckert.persistence.PersistentPropertyList;
 import de.andreas_rueckert.trade.CryptoCoinTrade;
 import de.andreas_rueckert.trade.Currency;
-import de.andreas_rueckert.trade.CurrencyImpl;
+//import de.andreas_rueckert.trade.CurrencyImpl;
 import de.andreas_rueckert.trade.CurrencyNotSupportedException;
 import de.andreas_rueckert.trade.CurrencyPair;
 import de.andreas_rueckert.trade.CurrencyPairImpl;
@@ -209,7 +209,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		initSupportedCurrencyPairs();
 		//System.out.println(currencyPairFeeTrade);
 
-		setCurrentCurrency( CurrencyImpl.BTC);
+		//setCurrentCurrency( CurrencyImpl.BTC);
 
 		// Create a new parser for the poloniex.com website.
 		_htmlParser = new PoloniexHtmlParser( this);
@@ -246,8 +246,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 			String currency;
 			String paymentCurrency;
 			String[] currencyDetail = new String[2];
-			CurrencyImpl currencyObject;
-			CurrencyImpl paymentCurrencyObject;
+			Currency currencyObject;
+			Currency paymentCurrencyObject;
 			CurrencyPairImpl currencyPair;
 			while(itPairs.hasNext()){
 				Object current = itPairs.next();
@@ -256,8 +256,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 				currencyDetail = pair.split("_");
 				currency = currencyDetail[1].toUpperCase();
 				paymentCurrency = currencyDetail[0].toUpperCase();
-				currencyObject = CurrencyImpl.findByString(currency);
-				paymentCurrencyObject = CurrencyImpl.findByString(paymentCurrency);
+				currencyObject = PoloniexCurrencyImpl.findByString(currency);
+				paymentCurrencyObject = PoloniexCurrencyImpl.findByString(paymentCurrency);
                 if (currencyObject != null && paymentCurrencyObject != null)
                 {
 				    currencyPair = new CurrencyPairImpl(currencyObject, paymentCurrencyObject);
@@ -274,7 +274,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	 * Initialization of the supported currency pairs for poloniex with default values.
 	 */
 	private void initDefaultSupportedCurrencyPairs() {
-		_supportedCurrencyPairs = new CurrencyPair[18];
+		/*_supportedCurrencyPairs = new CurrencyPair[18];
 		_supportedCurrencyPairs[0] = new CurrencyPairImpl( CurrencyImpl.BTC, CurrencyImpl.USD);
 		_supportedCurrencyPairs[1] = new CurrencyPairImpl( CurrencyImpl.BTC, CurrencyImpl.RUR);
 		_supportedCurrencyPairs[2] = new CurrencyPairImpl( CurrencyImpl.BTC, CurrencyImpl.EUR);
@@ -292,7 +292,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		_supportedCurrencyPairs[14] = new CurrencyPairImpl( CurrencyImpl.PPC, CurrencyImpl.BTC);
 		_supportedCurrencyPairs[15] = new CurrencyPairImpl( CurrencyImpl.PPC, CurrencyImpl.USD);
 		_supportedCurrencyPairs[16] = new CurrencyPairImpl( CurrencyImpl.FTC, CurrencyImpl.BTC);
-		_supportedCurrencyPairs[17] = new CurrencyPairImpl( CurrencyImpl.XPM, CurrencyImpl.BTC);
+		_supportedCurrencyPairs[17] = new CurrencyPairImpl( CurrencyImpl.XPM, CurrencyImpl.BTC);*/
 		
 	}
 
@@ -584,7 +584,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		
 		BigDecimal balance = new BigDecimal( jsonResponse.getString( currentCurrency));  // Get the balance for this currency.
 
-		result.add( new TradeSiteAccountImpl( balance, CurrencyImpl.findByString( currentCurrency.toUpperCase()), this));
+		result.add( new TradeSiteAccountImpl( balance, PoloniexCurrencyImpl.findByString( currentCurrency.toUpperCase()), this));
 	    }
 
 	    return result; // Return the array with the accounts.
@@ -683,51 +683,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      */
     private String getDepositAddress( Currency currency) {
 
-	// The URL to request the address from.
-	String url = null;
-
-	// Check, if the currency is a FIAT currency.
-	if( currency.equals( CurrencyImpl.RUR)
-	    || currency.equals( CurrencyImpl.EUR)
-	    || currency.equals( CurrencyImpl.USD)) {
-
-	    // The FIAT URLs differ from the cryptocoin URLs...
-	    url = "https://poloniex.com/profile#funds/deposit/" + currency.getName().toLowerCase();
-
-	} else {
-
-	    // Compute the cryptocoin URL from the currency id.
-	    url = "https://poloniex.com/profile#funds/deposit_coin/" + getIdForCurrency( currency);
-	}
-	
-	ensureLogin();  // Make sure, that the user is logged in.
-	
-	if( _customerId == null) {
-	    throw new MissingPoloniexCustomerIdException( "getDepositAddress: no customer id received from the poloniex.com website.");
-	}
-	
-	if( _currentCookies == null) {
-	    throw new MissingPoloniexCookieException( "No current poloniex.com cookie for getDepositAddress! Please login to get one!");
-	}
-
-
-	// Do a authenticate HTTP post request.
-	try {
-	    // Now post the actual profile request as jquery json.
-	    Response response = Jsoup.connect( url)
-		.method( Method.GET)
-		.cookies( _currentCookies)
-		.userAgent( USERAGENT)
-		.timeout( TIMEOUT)
-		.execute();
-
-	    // Now find the balances in the body.
-	    return _htmlParser.findCoinAddress( response.body());
-
-	} catch( IOException ioe) {
-	    System.err.println( "Cannot get deposit address from the poloniex.com website: " + ioe.toString());
-	}
-
 	return null;  // Indicate an error.
     }
 
@@ -741,7 +696,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      * @throws TradeDataNotAvailableException if the depth is not available.
      */
     public Depth getDepth( Currency currency) throws TradeDataNotAvailableException {
-	return getDepth( new CurrencyPairImpl( currency, CurrencyImpl.BTC));
+	return getDepth( new CurrencyPairImpl( currency, PoloniexCurrencyImpl.BTC));
     }
 
     /**
@@ -866,57 +821,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     
     public BigDecimal getFeeForTrade() {
         return new BigDecimal("0.002");
-    }
-
-    /**
-     * Get id for a pair of currencies.
-     * Look at http://bitcoin.stackexchange.com/questions/1393/does-poloniex-have-an-api-for-alternate-currencies
-     * for more info.
-     *
-     * @param currencyPair The currency pair to trade.
-     *
-     * @return The id for this currency pair, or -1 if the id is not known.
-     */
-    private short getIdForCurrencies( CurrencyPair currencyPair) {
-
-	if( (CurrencyImpl)currencyPair.getPaymentCurrency() == CurrencyImpl.BTC) {
-	    switch( (CurrencyImpl)currencyPair.getCurrency()) {
-	    case LTC: return 10;
-	    }
-	} else if( (CurrencyImpl)currencyPair.getPaymentCurrency() == CurrencyImpl.USD) {
-	    switch( (CurrencyImpl)currencyPair.getCurrency()){
-	    case BTC: return 1;
-	    case LTC: return 14;
-	    }
-	}
-
-	throw new CurrencyNotSupportedException( "Currency pair: " 
-						 + currencyPair.getCurrency().getName() 
-						 + " with payment currency: " 
-						 + currencyPair.getPaymentCurrency().getName() 
-						 + " not supported in PoloniexClient.getIdForCurrencies");
-
-	// return -1;
-    }
-
-    /**
-     * Get the id of the combination of given currency and current currency.
-     *
-     * @param currency The currency to query.
-     */
-    private final short getIdForCurrency( Currency currency) {
-
-	switch( (CurrencyImpl)currency) {
-	case BTC: return 1;
-	case LTC: return 8;
-	case RUC: return 9;
-	case NMC: return 10;
-	case NVC: return 13;
-	}
-
-	throw new CurrencyNotSupportedException( "Currency: " 
-						 + currency.getName() 
-						 + " not supported in PoloniexClient.getIdForCurrency");
     }
 
     /**
