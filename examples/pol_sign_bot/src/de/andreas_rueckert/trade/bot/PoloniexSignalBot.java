@@ -84,8 +84,6 @@ public class PoloniexSignalBot
     private final static String DOMAIN = "www.poloniex.com";
     private final static String API_URL_INFO = "https://" + DOMAIN + "/public?command=returnTicker";
     private final static String API_URL_VOL = "https://" + DOMAIN + "/public?command=return24hVolume";
-    //private final static String FRONT_PAGE_URL = "https://" + DOMAIN + "/exchange/";
-    //private final static String HOT_HTML_REGEXP = "<div style=\"border-color:rgb(20,100,40);\"id=\"market(.*)\"";
 
     private final static String WWW_ROOT = "./www";
 
@@ -125,7 +123,7 @@ public class PoloniexSignalBot
         }
     }
 
-    public static JSONArray sortJsonObject(JSONObject obj, final String field)
+    private static JSONArray sortJsonObject(JSONObject obj, final String field)
     {
         List<JSONObject> jsons = new ArrayList<JSONObject>();
         for (Iterator it = obj.keys(); it.hasNext(); )
@@ -145,7 +143,6 @@ public class PoloniexSignalBot
             @Override
             public int compare(JSONObject lhs, JSONObject rhs)
             {
-                //System.out.println(lhs + " or " + rhs);
                 if (!lhs.containsKey(field))
                 {
                     return 1;
@@ -168,7 +165,7 @@ public class PoloniexSignalBot
         return JSONArray.fromObject(jsons);
     }
 
-    private static int updateTradeArchives() 
+    private static int updateTradeArchives(AbstractCollection<String> hotCollection) 
     {
         String requestResult = HttpUtils.httpGet(API_URL_INFO);
         int result = 0;
@@ -233,10 +230,7 @@ public class PoloniexSignalBot
                     pairInfo.add(relMacdFormat.format(relMacd));
                     pairInfo.add(relMacdFormat.format(deltaRelMacd));
                     output.put(pair, pairInfo);
-                    if (currencyPair.toString().equals("GRC<=>BTC") ||
-                            currencyPair.toString().equals("EMC2<=>BTC") ||
-                            currencyPair.toString().equals("MYR<=>BTC") ||
-                            currencyPair.toString().equals("XCP<=>BTC"))
+                    if (hotCollection.contains(pair))
                     {
                         logger.info(currencyPair + " " + priceFormat.format(price) + " " + macdFormat.format(macd));
                     }
@@ -257,27 +251,7 @@ public class PoloniexSignalBot
         return result;        
     }
 
-    private static void sleepUntilNextCycle(long t1, int numPairs)
-    {
-        long deltaT = System.currentTimeMillis() - t1;
-        logger.info("It took " + deltaT + " ms to analyze " + numPairs + " pairs.");
-        logger.info("Now going to sleep...");
-        deltaT = System.currentTimeMillis() - t1;
-        long sleepTime = UPDATE_INTERVAL * 1000 - deltaT; 
-        if (sleepTime > 0)
-        {
-	        try 
-            {
-                Thread.sleep(sleepTime);  // Wait for the next loop.
-            } 
-            catch( InterruptedException ie) 
-            {
-                System.err.println( "Ticker or depth loop sleep interrupted: " + ie.toString());
-            }
-        }
-    }
-
-    private static void makeHotList(String base)
+    private static JSONArray makeHotList(String base)
     {
         String requestResult = HttpUtils.httpGet(API_URL_VOL);
         int result = 0;
@@ -294,6 +268,55 @@ public class PoloniexSignalBot
             catch (FileNotFoundException e)
             {
                 logger.error(e);
+            }
+            finally
+            {
+                return output;
+            }
+        }
+        else
+        {
+            return null;
+        }
+    }
+ 
+    private static JSONArray truncateJsonArray(JSONArray src, int limit)
+    {
+        JSONArray result = new JSONArray();
+        for (int i = 0; i < limit; i++)
+        {
+            result.add(src.get(i));
+        }
+        return result;
+    }
+
+    private static void makeHotCollection(JSONArray src, AbstractCollection<String> result)
+    {
+        for (Iterator it = src.iterator(); it.hasNext(); )
+        {
+            JSONObject rec = (JSONObject) it.next();
+            JSONArray keys = rec.names();
+            String pair = keys.get(0) + "_" + keys.get(1);
+            result.add(pair);
+        }
+    }
+
+    private static void sleepUntilNextCycle(long t1, int numPairs)
+    {
+        long deltaT = System.currentTimeMillis() - t1;
+        logger.info("It took " + deltaT + " ms to analyze " + numPairs + " pairs.");
+        logger.info("Now going to sleep...");
+        deltaT = System.currentTimeMillis() - t1;
+        long sleepTime = UPDATE_INTERVAL * 1000 - deltaT; 
+        if (sleepTime > 0)
+        {
+	        try 
+            {
+                Thread.sleep(sleepTime);  // Wait for the next loop.
+            } 
+            catch( InterruptedException ie) 
+            {
+                System.err.println( "Ticker or depth loop sleep interrupted: " + ie.toString());
             }
         }
     }
@@ -342,9 +365,14 @@ public class PoloniexSignalBot
                     long t1 = System.currentTimeMillis();
                     try
                     {
-                        numPairs = updateTradeArchives();
-                        makeHotList("BTC");
-                        makeHotList("LTC");
+                        JSONArray hotBtc = makeHotList("BTC");
+                        JSONArray hotLtc = makeHotList("LTC");
+                        hotBtc = truncateJsonArray(hotBtc, 5);
+                        hotLtc = truncateJsonArray(hotLtc, 3);
+                        AbstractCollection<String> hotCollection = new ArrayList<String>();
+                        makeHotCollection(hotBtc, hotCollection);
+                        makeHotCollection(hotLtc, hotCollection);
+                        numPairs = updateTradeArchives(hotCollection);
                     }
                     catch (Exception e)
                     {
