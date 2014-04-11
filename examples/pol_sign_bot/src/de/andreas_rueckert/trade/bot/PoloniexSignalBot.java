@@ -125,34 +125,43 @@ public class PoloniexSignalBot
         }
     }
 
-    public static JSONArray sortJsonArray(JSONArray array, final String field)
+    public static JSONArray sortJsonObject(JSONObject obj, final String field)
     {
         List<JSONObject> jsons = new ArrayList<JSONObject>();
-        for (int i = 0; i < array.size(); i++)
+        for (Iterator it = obj.keys(); it.hasNext(); )
         {
-            jsons.add(array.getJSONObject(i));
+            String key = (String) it.next();
+            if (key.startsWith(field))
+            {
+                Object rec = obj.get(key);
+                if (rec instanceof JSONObject)
+                {
+                    jsons.add((JSONObject) rec);
+                }
+            }
         }
         Collections.sort(jsons, new Comparator<JSONObject>()
         {
             @Override
             public int compare(JSONObject lhs, JSONObject rhs)
             {
-                String lid = lhs.getString(field);
-                String rid = rhs.getString(field);
-                if (lid != null)
+                //System.out.println(lhs + " or " + rhs);
+                if (!lhs.containsKey(field))
                 {
-                    if (rid == null)
+                    return 1;
+                }
+                else 
+                {
+                    if (!rhs.containsKey(field))
                     {
-                        return 1;
+                        return -1;
                     }
                     else
                     {
-                        return (new Double(lid)).compareTo(new Double(rid));
+                        String lid = lhs.getString(field);
+                        String rid = rhs.getString(field);
+                        return (new Double(rid)).compareTo(new Double(lid));
                     }
-                }
-                else
-                {
-                    return -1;
                 }
             }
         });
@@ -268,6 +277,27 @@ public class PoloniexSignalBot
         }
     }
 
+    private static void makeHotList(String base)
+    {
+        String requestResult = HttpUtils.httpGet(API_URL_VOL);
+        int result = 0;
+        if (requestResult != null)
+        {
+            JSONObject jsonResult = JSONObject.fromObject(requestResult);
+            JSONArray output = sortJsonObject(jsonResult, base);
+            try
+            {
+                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "hot_" + base);
+                pw.println(output);
+                pw.flush();
+            }
+            catch (FileNotFoundException e)
+            {
+                logger.error(e);
+            }
+        }
+    }
+
     public static void main(String[] args)
     {
         wwwRoot = new File(WWW_ROOT);
@@ -313,28 +343,8 @@ public class PoloniexSignalBot
                     try
                     {
                         numPairs = updateTradeArchives();
-
-                    /*******/
-                        String requestResult = HttpUtils.httpGet(API_URL_INFO);
-                        int result = 0;
-                        if (requestResult != null)
-                        {
-                            JSONObject jsonResult = JSONObject.fromObject(requestResult);
-                            JSONArray output = sortJsonArray(jsonResult, "BTC");
-
-                            try
-                            {
-                                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "hot");
-                                pw.println(output);
-                                pw.flush();
-                            }
-                            catch (FileNotFoundException e)
-                            {
-                                logger.error(e);
-                            }
-                        }
-                    /*******/
-
+                        makeHotList("BTC");
+                        makeHotList("LTC");
                     }
                     catch (Exception e)
                     {
