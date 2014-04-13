@@ -63,7 +63,7 @@ import de.andreas_rueckert.trade.Currency;
 //import de.andreas_rueckert.trade.CurrencyImpl;
 import de.andreas_rueckert.trade.CurrencyNotSupportedException;
 import de.andreas_rueckert.trade.CurrencyPair;
-import de.andreas_rueckert.trade.CurrencyPairImpl;
+//import de.andreas_rueckert.trade.CurrencyPairImpl;
 import de.andreas_rueckert.trade.Depth;
 import de.andreas_rueckert.trade.Price;
 import de.andreas_rueckert.trade.TradeDataNotAvailableException;
@@ -238,8 +238,8 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 		String requestResult = HttpUtils.httpGet(API_URL_INFO);
 		if( requestResult != null) {
 			//update the supported currency pairs
-			List<CurrencyPairImpl> currencyPairs = new ArrayList<CurrencyPairImpl>();
-			JSONObject jsonResult = JSONObject.fromObject( requestResult);
+			List<PoloniexCurrencyPairImpl> currencyPairs = new ArrayList<PoloniexCurrencyPairImpl>();
+			JSONObject jsonResult = JSONObject.fromObject(requestResult);
 
 			Iterator itPairs = ((JSONObject) jsonResult).keys();
 			String pair;
@@ -248,7 +248,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 			String[] currencyDetail = new String[2];
 			Currency currencyObject;
 			Currency paymentCurrencyObject;
-			CurrencyPairImpl currencyPair;
+			PoloniexCurrencyPairImpl currencyPair;
 			while(itPairs.hasNext()){
 				Object current = itPairs.next();
 				pair = (String) current;
@@ -260,11 +260,11 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 				paymentCurrencyObject = PoloniexCurrencyImpl.findByString(paymentCurrency);
                 if (currencyObject != null && paymentCurrencyObject != null)
                 {
-				    currencyPair = new CurrencyPairImpl(currencyObject, paymentCurrencyObject);
+				    currencyPair = new PoloniexCurrencyPairImpl(currencyObject, paymentCurrencyObject);
 				    currencyPairs.add(currencyPair);
                 }
 			}
-			_supportedCurrencyPairs = (CurrencyPairImpl []) currencyPairs.toArray(new CurrencyPairImpl[currencyPairs.size()]);
+			_supportedCurrencyPairs = (PoloniexCurrencyPairImpl []) currencyPairs.toArray(new PoloniexCurrencyPairImpl[currencyPairs.size()]);
 			return true;
 		}
 		return false;
@@ -695,8 +695,9 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @throws TradeDataNotAvailableException if the depth is not available.
      */
-    public Depth getDepth( Currency currency) throws TradeDataNotAvailableException {
-	return getDepth( new CurrencyPairImpl( currency, PoloniexCurrencyImpl.BTC));
+    public Depth getDepth( Currency currency) throws TradeDataNotAvailableException 
+    {
+    	return getDepth(new PoloniexCurrencyPairImpl(currency, PoloniexCurrencyImpl.BTC));
     }
 
     /**
