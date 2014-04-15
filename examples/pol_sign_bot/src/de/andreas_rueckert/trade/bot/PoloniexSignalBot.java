@@ -226,7 +226,8 @@ public class PoloniexSignalBot
         ArrayList<Trade> resultBuffer = new ArrayList<Trade>();
         for (int i = 0; i < trades.length; ++i) 
         {
-            if (trades[i].getTimestamp() > from && trades[i].getTimestamp() <= to) 
+            long t = trades[i].getTimestamp();  
+            if (t > from && t <= to) 
             {
                 resultBuffer.add(trades[i]);
             }
@@ -434,29 +435,24 @@ public class PoloniexSignalBot
 
     private static void fillArchives(String pair)
     {
-        //logger.info(pair + ": getting data");
-        int totalTrades = EMA_LONG_INTERVALS_NUM + MACD_EMA_INTERVALS_NUM;
+        int totalTrades = EMA_LONG_INTERVALS_NUM + MACD_EMA_INTERVALS_NUM - 1;
         TradeArchive archive = new TradeArchive(totalTrades);
         Trade[] data = getTradesFromSite(pair);
         Price lastPrice = data[data.length - 1].getPrice();
-        //logger.info(pair + ": data received");
         long now = timeUtils.getCurrentGMTTimeMicros();  
-        //logger.info(pair + ": now = " + now);
         long to = now - totalTrades * MACD_EMA_TIME_PERIOD;
         long from;
         for (int i = 0; i < totalTrades; i++)
         {
             from = to - MACD_EMA_TIME_PERIOD;
-            //logger.info(pair + ": " + i + ": (" + from + "; " + to + "]");
             Trade[] slice = filterTrades(data, from, to);
-            //logger.info(pair + ": " + slice.length + " trades");
             if (slice.length > 0)
             {
                 archive.add(slice[slice.length - 1]);
             }
             else
             {
-                archive.add(new SimpleTrade(null, now));
+                archive.add(new SimpleTrade(null, to));
             }
             to += MACD_EMA_TIME_PERIOD;
         }
@@ -475,19 +471,27 @@ public class PoloniexSignalBot
         }
         tradeArchives.put(pair, archive);
         TradeArchive macdArchive = new TradeArchive(MACD_EMA_INTERVALS_NUM);
+    
+        Trade[] archiveData = archive.toArray(new Trade[archive.size()]);
+        //Trade[] shortData = new Trade[EMA_SHORT_INTERVALS_NUM];
+        //Trade[] longData = new Trade[EMA_LONG_INTERVALS_NUM];
 
         long startTime = now - MACD_EMA_INTERVAL_MICROS;
         for (int i = MACD_EMA_INTERVALS_NUM; i > 0; i--)
         {
-            for (int j = 0; j < archive.size(); j++)
+            /*for (int j = 0; j < archive.size(); j++)
             {
                 System.out.print(archive.get(j).getPrice() + ", ");
-            }
-            Trade[] archiveData = archive.toArray(new Trade[archive.size()]);
-            System.out.println(pair + archive.size() + "!!!!!!!!!!!!!!!!");
-            Price shortEma = analyzer.ema(archiveData, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
-            System.out.println(pair + archive.size() + "!!!!!!!!!!!!!!!!???");
-            Price longEma = analyzer.ema(archiveData, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+            }*/
+            Trade[] shortData = Arrays.copyOfRange(archiveData, archiveData.length - i - EMA_SHORT_INTERVALS_NUM + 1, archiveData.length - i + 1);
+            Trade[] longData = Arrays.copyOfRange(archiveData, archiveData.length - i - EMA_LONG_INTERVALS_NUM + 1, archiveData.length - i + 1);
+            System.out.println("[" + (archiveData.length - i - EMA_SHORT_INTERVALS_NUM + 1) + "; " + (archiveData.length - i + 1) + ")");
+            System.out.println(pair + " : " + i + " : " + archiveData.length + " : " + shortData.length + " : " + longData.length); 
+            Price shortEma = analyzer.ema(shortData, EMA_SHORT_INTERVAL);
+            Price longEma = analyzer.ema(longData, EMA_LONG_INTERVAL);
+            // magig below - subtract extra MACD_EMA_TIME_PERIOD
+            //Price shortEma = analyzer.ema(archiveData, startTime - EMA_SHORT_INTERVAL_MICROS - 2 * MACD_EMA_TIME_PERIOD, startTime, MACD_EMA_TIME_PERIOD);
+            //Price longEma = analyzer.ema(archiveData, startTime - EMA_LONG_INTERVAL_MICROS - 2 * MACD_EMA_TIME_PERIOD, startTime, MACD_EMA_TIME_PERIOD);
             Price macdLine = shortEma.subtract(longEma);            
             macdArchive.add(new SimpleTrade(macdLine, startTime));
             logger.info(pair + ": " + (MACD_EMA_INTERVALS_NUM - i) + " : " + macdLine);

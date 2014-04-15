@@ -195,8 +195,8 @@ public class ChartAnalyzer {
 
 	// Now loop over the trades.
 	for( int index = 0; index < trades.length; ++index) {
-	    
-	    Trade currentTrade = trades[ index];
+	   
+        Trade currentTrade = trades[ index];
 	    long currentTimestamp = currentTrade.getTimestamp();
 
 	    // Check, if this trade is in the target timespan.
@@ -214,7 +214,7 @@ public class ChartAnalyzer {
 		    // Get the weight for this price.
 		    // weights[0] is the weight for the oldest period! 
 		    // weights[ weights.length - 2] is the weight for the most recent period!
-		    double weight = weights[ weights.length - 2 - currentTimePeriod];
+            double weight = weights[ weights.length - 2 - currentTimePeriod];
 
 		    // Now add the weighted price to the total weighted prices.
 		    totalPrice = new Price( totalPrice.add( currentTrade.getPrice().multiply( new BigDecimal( weight))));
