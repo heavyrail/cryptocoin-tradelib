@@ -162,6 +162,16 @@ public class ChartAnalyzer {
      */
     public Price ema( Trade [] trades, long startTime, long endTime, long timePeriod) throws NotEnoughTradesException {
 
+System.out.print(new java.util.Date(startTime / 1000));
+System.out.print(" ... ");
+System.out.print(new java.util.Date(endTime / 1000));
+for (int i = 0; i < trades.length; i++)
+{
+    System.out.print(trades[i].getPrice());
+    System.out.print(" ");
+    System.out.println(new java.util.Date(trades[i].getTimestamp() / 1000));
+}
+
 	// The interval to check.
 	long timeInterval = endTime - startTime;
 
@@ -183,8 +193,8 @@ public class ChartAnalyzer {
 	    
 	    // This is the translation of the formula: Multiplier: (2 / (Time periods + 1) ) 
 	    // but every EMA of the previous period is multiplied with ( 1 - k[previoud time period])
-	    // At least, that's the way, I understand it... (A. Rueckert)
-	    weights[ currentTimePeriod] = (1.0d - weights[ currentTimePeriod + 1]) * (2.0d / (currentTimePeriod + 2));
+	    // At least, that's the way, I understand it... (A. Rueckert) 
+        weights[ currentTimePeriod] = (1.0d - weights[ currentTimePeriod + 1]) * (2.0d / (currentTimePeriod + 2));
 	}
 
 	// Create a var to sum up the weighted prices.
@@ -214,18 +224,22 @@ public class ChartAnalyzer {
 		    // Get the weight for this price.
 		    // weights[0] is the weight for the oldest period! 
 		    // weights[ weights.length - 2] is the weight for the most recent period!
+System.out.println("np=" + nPeriods);
+System.out.println("wl=" + weights.length);
+System.out.println("ctp=" + currentTimePeriod);
             double weight = weights[ weights.length - 2 - currentTimePeriod];
-
-		    // Now add the weighted price to the total weighted prices.
+System.out.println("BBBBBBBBBB");
+ 	    
+            // Now add the weighted price to the total weighted prices.
 		    totalPrice = new Price( totalPrice.add( currentTrade.getPrice().multiply( new BigDecimal( weight))));
-
-		    // Add the current weight to the total weight.
+		    
+            // Add the current weight to the total weight.
 		    totalWeight += weight;
 		}
 	    }
 		    
 	}
-
+System.out.println("Success!");
 	// Now scale the total of the weighted prices and return this price.
 	return new Price( totalPrice.divide( new BigDecimal( totalWeight, MathContext.DECIMAL128), MathContext.DECIMAL128));
 	

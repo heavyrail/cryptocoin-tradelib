@@ -473,8 +473,6 @@ public class PoloniexSignalBot
         TradeArchive macdArchive = new TradeArchive(MACD_EMA_INTERVALS_NUM);
     
         Trade[] archiveData = archive.toArray(new Trade[archive.size()]);
-        //Trade[] shortData = new Trade[EMA_SHORT_INTERVALS_NUM];
-        //Trade[] longData = new Trade[EMA_LONG_INTERVALS_NUM];
 
         long startTime = now - MACD_EMA_INTERVAL_MICROS;
         for (int i = MACD_EMA_INTERVALS_NUM; i > 0; i--)
@@ -487,11 +485,11 @@ public class PoloniexSignalBot
             Trade[] longData = Arrays.copyOfRange(archiveData, archiveData.length - i - EMA_LONG_INTERVALS_NUM + 1, archiveData.length - i + 1);
             System.out.println("[" + (archiveData.length - i - EMA_SHORT_INTERVALS_NUM + 1) + "; " + (archiveData.length - i + 1) + ")");
             System.out.println(pair + " : " + i + " : " + archiveData.length + " : " + shortData.length + " : " + longData.length); 
-            Price shortEma = analyzer.ema(shortData, EMA_SHORT_INTERVAL);
-            Price longEma = analyzer.ema(longData, EMA_LONG_INTERVAL);
+            //Price shortEma = analyzer.ema(shortData, EMA_SHORT_INTERVAL);
+            //Price longEma = analyzer.ema(longData, EMA_LONG_INTERVAL);
             // magig below - subtract extra MACD_EMA_TIME_PERIOD
-            //Price shortEma = analyzer.ema(archiveData, startTime - EMA_SHORT_INTERVAL_MICROS - 2 * MACD_EMA_TIME_PERIOD, startTime, MACD_EMA_TIME_PERIOD);
-            //Price longEma = analyzer.ema(archiveData, startTime - EMA_LONG_INTERVAL_MICROS - 2 * MACD_EMA_TIME_PERIOD, startTime, MACD_EMA_TIME_PERIOD);
+            Price shortEma = analyzer.ema(archiveData, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+            Price longEma = analyzer.ema(archiveData, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
             Price macdLine = shortEma.subtract(longEma);            
             macdArchive.add(new SimpleTrade(macdLine, startTime));
             logger.info(pair + ": " + (MACD_EMA_INTERVALS_NUM - i) + " : " + macdLine);
