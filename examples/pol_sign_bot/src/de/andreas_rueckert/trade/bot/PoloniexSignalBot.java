@@ -318,6 +318,7 @@ public class PoloniexSignalBot
     private static JSONArray makeHotList(String base)
     {
         String requestResult = HttpUtils.httpGet(API_URL_VOL);
+        System.out.println(requestResult);
         int result = 0;
         if (requestResult != null)
         {
