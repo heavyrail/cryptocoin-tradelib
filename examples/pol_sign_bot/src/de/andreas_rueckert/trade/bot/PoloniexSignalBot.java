@@ -209,7 +209,7 @@ public class PoloniexSignalBot
             }
             try
             {
-                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "macd");
+                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "macd.html");
                 pw.println(output);
                 pw.flush();
             }
@@ -326,7 +326,7 @@ public class PoloniexSignalBot
             JSONArray output = sortJsonObject(jsonResult, base);
             try
             {
-                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "hot_" + base);
+                PrintWriter pw = new PrintWriter(wwwRoot + File.separator + "hot_" + base + ".html");
                 pw.println(output);
                 pw.flush();
             }
