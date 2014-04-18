@@ -212,6 +212,11 @@ public class TradeSiteUserAccount {
 	return _parameters.get( "userId");
     }
 
+    public String getProxy()
+    {
+ 	    return _parameters.get("proxy");
+    }
+
     /**
      * Check, if this user account is activated at the moment.
      *

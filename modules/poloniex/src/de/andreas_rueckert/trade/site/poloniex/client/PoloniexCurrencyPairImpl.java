@@ -65,8 +65,8 @@ public class PoloniexCurrencyPairImpl extends CurrencyPairImpl {
 	    }
 
 	    // Convert the 2 string into Currency objects.
-	    Currency currency = CurrencyImpl.findByString(currencies[0]);
-	    Currency paymentCurrency = CurrencyImpl.findByString(currencies[1]);
+	    Currency currency = PoloniexCurrencyImpl.findByString(currencies[0]);
+	    Currency paymentCurrency = PoloniexCurrencyImpl.findByString(currencies[1]);
 
 	    // Create a new currency pair and return it.
 	    return new PoloniexCurrencyPairImpl(currency, paymentCurrency);
