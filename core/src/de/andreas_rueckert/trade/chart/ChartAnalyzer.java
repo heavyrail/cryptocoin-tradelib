@@ -167,6 +167,8 @@ System.out.print(" ... ");
 System.out.print(new java.util.Date(endTime / 1000));
 for (int i = 0; i < trades.length; i++)
 {
+    System.out.print(i);
+    System.out.print(" ");
     System.out.print(trades[i].getPrice());
     System.out.print(" ");
     System.out.println(new java.util.Date(trades[i].getTimestamp() / 1000));
@@ -226,6 +228,7 @@ for (int i = 0; i < trades.length; i++)
 		    // weights[ weights.length - 2] is the weight for the most recent period!
 System.out.println("np=" + nPeriods);
 System.out.println("wl=" + weights.length);
+System.out.println(new java.util.Date(endTime / 1000) + " ************ " + new java.util.Date(currentTimestamp / 1000));
 System.out.println("ctp=" + currentTimePeriod);
             double weight = weights[ weights.length - 2 - currentTimePeriod];
 System.out.println("BBBBBBBBBB");

@@ -448,7 +448,7 @@ public class PoloniexSignalBot
             Trade[] slice = filterTrades(data, from, to);
             if (slice.length > 0)
             {
-                archive.add(slice[slice.length - 1]);
+                archive.add(slice[slice.length - 1]); // TODO modify timestamp now!!!!
             }
             else
             {
