@@ -179,7 +179,7 @@ public class PoloniexSignalBot
             while (itPairs.hasNext())
             {
                 String pair = (String) itPairs.next();
-                Price price = new Price((String) jsonResult.get(pair));
+                Price price = new Price(jsonResult.getJSONObject(pair).getString("last"));
                 CurrencyPairImpl currencyPair = makeCurrencyPair(pair);
                 if (currencyPair != null)
                 {
@@ -448,11 +448,13 @@ public class PoloniexSignalBot
             Trade[] slice = filterTrades(data, from, to);
             if (slice.length > 0)
             {
-                archive.add(slice[slice.length - 1]); // TODO modify timestamp now!!!!
+                SimpleTrade t = (SimpleTrade) slice[slice.length - 1];
+                t.setTimestamp(to - i * 1000000); // MAGIC modifying timestamp for EMA to work! TODO fix it
+                archive.add(t);
             }
             else
             {
-                archive.add(new SimpleTrade(null, to));
+                archive.add(new SimpleTrade(null, to - i * 1000000)); // MAGIC as above
             }
             to += MACD_EMA_TIME_PERIOD;
         }
@@ -474,26 +476,27 @@ public class PoloniexSignalBot
     
         Trade[] archiveData = archive.toArray(new Trade[archive.size()]);
 
-        long startTime = now - MACD_EMA_INTERVAL_MICROS;
+        long endTime = now - MACD_EMA_INTERVAL_MICROS;
         for (int i = MACD_EMA_INTERVALS_NUM; i > 0; i--)
         {
-            /*for (int j = 0; j < archive.size(); j++)
-            {
-                System.out.print(archive.get(j).getPrice() + ", ");
-            }*/
             Trade[] shortData = Arrays.copyOfRange(archiveData, archiveData.length - i - EMA_SHORT_INTERVALS_NUM + 1, archiveData.length - i + 1);
             Trade[] longData = Arrays.copyOfRange(archiveData, archiveData.length - i - EMA_LONG_INTERVALS_NUM + 1, archiveData.length - i + 1);
             System.out.println("[" + (archiveData.length - i - EMA_SHORT_INTERVALS_NUM + 1) + "; " + (archiveData.length - i + 1) + ")");
             System.out.println(pair + " : " + i + " : " + archiveData.length + " : " + shortData.length + " : " + longData.length); 
-            //Price shortEma = analyzer.ema(shortData, EMA_SHORT_INTERVAL);
-            //Price longEma = analyzer.ema(longData, EMA_LONG_INTERVAL);
+            Price shortEma = analyzer.ema(shortData, EMA_SHORT_INTERVAL);
+            Price longEma = analyzer.ema(longData, EMA_LONG_INTERVAL);
+            
             // magig below - subtract extra MACD_EMA_TIME_PERIOD
-            Price shortEma = analyzer.ema(archiveData, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
-            Price longEma = analyzer.ema(archiveData, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+            //long shortStartTime = endTime - EMA_SHORT_INTERVAL_MICROS;
+            //Price shortEma = analyzer.ema(archiveData, shortStartTime, endTime, MACD_EMA_TIME_PERIOD);
+            //long longStartTime = endTime - EMA_LONG_INTERVAL_MICROS;
+            //System.out.println(new java.util.Date(longStartTime / 1000) + " xxxxxxx" + new java.util.Date(endTime / 1000));
+            //Price longEma = analyzer.ema(archiveData, longStartTime, endTime, MACD_EMA_TIME_PERIOD);
+            
             Price macdLine = shortEma.subtract(longEma);            
-            macdArchive.add(new SimpleTrade(macdLine, startTime));
+            macdArchive.add(new SimpleTrade(macdLine, endTime));
             logger.info(pair + ": " + (MACD_EMA_INTERVALS_NUM - i) + " : " + macdLine);
-            startTime += MACD_EMA_TIME_PERIOD;
+            endTime += MACD_EMA_TIME_PERIOD;
         }
 
         macdArchives.put(pair, macdArchive);
@@ -581,6 +584,11 @@ public class PoloniexSignalBot
             return price;
         }
                     
+        public void setTimestamp(long timestamp)
+        {
+            this.timestamp = timestamp;
+        }
+
         public long getTimestamp()
         {
             return timestamp;
