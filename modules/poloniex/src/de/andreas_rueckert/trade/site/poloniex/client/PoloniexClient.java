@@ -517,10 +517,21 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
             else
             {
 		        // Try to get and store the site id for the order first, so we can access the order later.
-		        long poloniexOrderId = jsonResponse.getLong("orderNumber");
-		        order.setSiteId("" + poloniexOrderId);  // Store the id in the order.
-                order.setStatus(OrderStatus.PARTIALLY_FILLED);
-		        return order.getStatus();
+                if (jsonResponse.has("orderNumber"))
+                {
+		            long poloniexOrderId = jsonResponse.getLong("orderNumber");
+		            order.setSiteId("" + poloniexOrderId);  // Store the id in the order.
+                    order.setStatus(OrderStatus.PARTIALLY_FILLED);
+		            return order.getStatus();
+                }
+                else
+                {
+                    if (jsonResponse.has("error"))
+                    {
+                        System.out.println(jsonResponse.getString("error"));
+                    }
+                    return OrderStatus.ERROR;
+                }
 	        }
 	    } 
         else if (orderType == OrderType.DEPOSIT) 

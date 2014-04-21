@@ -101,7 +101,6 @@ public class PoloniexSignalBot
     private static DecimalFormat relMacdFormat;
     private static ChartAnalyzer analyzer;
     private static ChartProvider provider;
-    private static BigDecimal lastRelMacd;
     private static File wwwRoot;
     private static AbstractCollection<String> hotCollection;
    
@@ -192,13 +191,10 @@ public class PoloniexSignalBot
                     Price macd = macdLine.subtract(macdSignalLine);
                     BigDecimal relMacd = 
                             price.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ZERO : macd.divide(price, MathContext.DECIMAL128).multiply(THOUSAND);
-                    BigDecimal deltaRelMacd = relMacd.subtract(lastRelMacd);
-                    lastRelMacd = relMacd;
                     JSONArray pairInfo = new JSONArray();
                     pairInfo.add(priceFormat.format(price));
                     pairInfo.add(macdFormat.format(macd));
                     pairInfo.add(relMacdFormat.format(relMacd));
-                    pairInfo.add(relMacdFormat.format(deltaRelMacd));
                     output.put(pair, pairInfo);
                     if (hotCollection.contains(pair))
                     {
@@ -318,7 +314,7 @@ public class PoloniexSignalBot
     private static JSONArray makeHotList(String base)
     {
         String requestResult = HttpUtils.httpGet(API_URL_VOL);
-        System.out.println(requestResult);
+        //System.out.println(requestResult);
         int result = 0;
         if (requestResult != null)
         {
@@ -425,7 +421,6 @@ public class PoloniexSignalBot
         priceFormat = new DecimalFormat("###0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         macdFormat = new DecimalFormat("+##0.00000000000;-##0.00000000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
         relMacdFormat = new DecimalFormat("+###.###;-###.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
-        lastRelMacd = new BigDecimal("0");
         hotCollection = updateHotCollection();
         for (Iterator it = hotCollection.iterator(); it.hasNext(); )
         {

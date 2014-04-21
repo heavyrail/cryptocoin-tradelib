@@ -48,9 +48,7 @@ import de.andreas_rueckert.trade.order.OrderStatus;
 import de.andreas_rueckert.trade.order.DepthOrder;
 import de.andreas_rueckert.trade.Price;
 import de.andreas_rueckert.trade.site.TradeSite;
-import de.andreas_rueckert.util.LogUtils;
-import de.andreas_rueckert.util.ModuleLoader;
-import de.andreas_rueckert.util.TimeUtils;
+import de.andreas_rueckert.util.*;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -68,6 +66,9 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
 import de.andreas_rueckert.persistence.PersistentProperty;
 import de.andreas_rueckert.persistence.PersistentPropertyList;
+
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
 
 /**
  * This is a simple bot to demonstrate the usage of the cryptocoin tradelib.
@@ -90,6 +91,9 @@ public class MaBot implements TradeBot {
      * The minimal trade volume.
      */
     private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.01");
+
+    private final static BigDecimal MIN_TRADE_BTC_AMOUNT = new Amount("0.0001");
+
 
     /**
      * The interval to update the bot activities.
@@ -155,7 +159,9 @@ public class MaBot implements TradeBot {
 
     private BigDecimal initialAssets;
 
-//    private String initialAssetsString;
+    private String proxy;
+
+    private boolean proxyEnabled;
 
     private BigDecimal initialSellPrice;
 
@@ -187,8 +193,10 @@ public class MaBot implements TradeBot {
     PersistentPropertyList settings = new PersistentPropertyList();
     settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
     settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
+    proxy = _tradeSiteUserAccount.getProxy();
+    proxyEnabled = proxy != null && proxy.length() > 0;
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("XBC<=>BTC");
+	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("NOBL<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -297,14 +305,16 @@ public class MaBot implements TradeBot {
         _updateThread = new Thread() 
         {
 
-            Price shortEma;
-            Price longEma;
+            //Price shortEma;
+            //Price longEma;
             ArrayList<Trade> macdCache;
             BigDecimal macd;
             Price macdLine;
             BigDecimal macdSignalLine;
-            BigDecimal lastMacd;
-            BigDecimal deltaMacd;
+            //BigDecimal lastMacd;
+            BigDecimal lastRelMacd;
+            //BigDecimal deltaMacd;
+            BigDecimal deltaRelMacd;
             BigDecimal relMacd;
             Price buyPrice;
             Price sellPrice;
@@ -317,8 +327,6 @@ public class MaBot implements TradeBot {
             BigDecimal sellFactor;
             BigDecimal stopLossFactor;
             BigDecimal takeProfitFactor;
-            //BigDecimal oldCurrencyAmount;
-            //BigDecimal oldPaymentCurrencyAmount;
             String pendingOrderId;
 
             /**
@@ -351,9 +359,9 @@ public class MaBot implements TradeBot {
 
             private void initTrade()
             {
-                macdCache = new ArrayList<Trade>();  
                 stopLossFactor = BigDecimal.ONE.subtract(LOSS_TO_STOP);
                 lastDeal = null;
+                lastRelMacd = null;
                 try
                 {
                     if (_tradeSite instanceof BtcEClient)
@@ -373,27 +381,34 @@ public class MaBot implements TradeBot {
                     BigDecimal priceCoeff = BigDecimal.ONE.subtract(doubleFee).add(feeSquared);
                     BigDecimal profitCoeff = BigDecimal.ONE.add(MIN_PROFIT);
 		            sellFactor = profitCoeff.divide(priceCoeff, MathContext.DECIMAL128);
-                    analyzer = ChartAnalyzer.getInstance(); 
                     provider = ChartProvider.getInstance();
-                    timeUtils = TimeUtils.getInstance();
-                   
-                    long startTime = timeUtils.getCurrentGMTTimeMicros() - MACD_EMA_INTERVAL_MICROS;
-                    long timeFrame = MACD_EMA_INTERVAL_MICROS + EMA_LONG_INTERVAL_MICROS;
                     
-                    Trade [] trades = provider.getTrades(_tradeSite, _tradedCurrencyPair, timeFrame);
-                    System.out.println(trades.length);
-                    System.out.println((startTime - timeFrame) + "..." + startTime);
-                    logger.info("filling MACD cache");
-                    for (int i = MACD_EMA_INTERVALS_NUM - 1; i >= 0; i--)
+                    if (!proxyEnabled)
                     {
-                        System.out.println(i);
-                        shortEma = analyzer.ema(trades, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
-                        longEma = analyzer.ema(trades, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
-                        updateMacdSignals(shortEma, longEma, startTime);
-                        startTime += MACD_EMA_TIME_PERIOD;
+                        macdCache = new ArrayList<Trade>();  
+                        analyzer = ChartAnalyzer.getInstance(); 
+                        timeUtils = TimeUtils.getInstance();
+                        long startTime = timeUtils.getCurrentGMTTimeMicros() - MACD_EMA_INTERVAL_MICROS;
+                        long timeFrame = MACD_EMA_INTERVAL_MICROS + EMA_LONG_INTERVAL_MICROS;
+                        Trade [] trades = provider.getTrades(_tradeSite, _tradedCurrencyPair, timeFrame);
+                        System.out.println(trades.length);
+                        System.out.println((startTime - timeFrame) + "..." + startTime);
+                        logger.info("filling MACD cache");
+                        for (int i = MACD_EMA_INTERVALS_NUM - 1; i >= 0; i--)
+                        {
+                            System.out.println(i);
+                            Price shortEma = analyzer.ema(trades, startTime - EMA_SHORT_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+                            Price longEma = analyzer.ema(trades, startTime - EMA_LONG_INTERVAL_MICROS, startTime, MACD_EMA_TIME_PERIOD);
+                            updateMacdSignals(shortEma, longEma, startTime);
+                            startTime += MACD_EMA_TIME_PERIOD;
+                        }
+                        logger.info("MACD cache filled");
+                        lastRelMacd = relMacd;
                     }
-                    logger.info("MACD cache filled");
-                    lastMacd = macd;
+                    else
+                    {
+                        getSignalsFromProxy();
+                    }
 
                     depth = provider.getDepth(_tradeSite, _tradedCurrencyPair); 
                     lastPrice = depth.getSell(0).getPrice();
@@ -403,9 +418,7 @@ public class MaBot implements TradeBot {
                     BigDecimal currencyValue = getFunds(currency);                                                                                                            
                     BigDecimal payCurrencyValue = getFunds(payCurrency);                                                                                                      
                     initialAssets = initialSellPrice.multiply(currencyValue).add(payCurrencyValue);                                 
-                    //initialAssetsString = initialAssets.setScale(8, RoundingMode.CEILING).toPlainString();
                     cycleNum = 1;
-                    //shortEmaAbove = shortEma.compareTo(longEma) > 0;
                     logger.info("           fee = " + fee);
                     logger.info("   sell factor = " + sellFactor);
                     logger.info("initial assets = " + initialAssets);
@@ -486,45 +499,6 @@ public class MaBot implements TradeBot {
                             // TODO
                         }
                     }
-
-                    /*
-                    OrderStatus pendingOrderResult = orderBook.checkOrder(pendingOrderId);
-                    if (pendingOrderResult != OrderStatus.UNKNOWN) 
-                    {
-                        boolean tradeDone = 
-                                oldCurrencyAmount != null &&
-                                oldCurrencyAmount.compareTo(getFunds(currency)) != 0 &&
-                                oldPaymentCurrencyAmount != null &&
-                                oldPaymentCurrencyAmount.compareTo(getFunds(paymentCurrency)) != 0 
-                                
-                        if (!tradeDone)
-                        {
-                            logger.info("order has been executed, but nothing changed!");
-                        }
-                        else
-                        {
-                            pendingOrderId = null;
-                            lastDeal = pendingOrder;
-                            lastPrice = pendingOrder.getPrice();
-                            if (pendingOrder.getOrderType() == OrderType.BUY)
-                            {
-                                stopLossPrice = lastPrice.multiply(stopLossFactor);
-                                targetBuyPrice = lastPrice.multiply(sellFactor);
-                            }
-                            else
-                            {
-                                // TODO
-                            }
-                        }
-                        if (pendingOrderResult == OrderStatus.PARTIALLY_FILLED)
-                        {
-                            logger.info("cancelling partially filled order");
-                            if (orderBook.cancelOrder(pendingOrder))
-                            {
-                                pendingOrderId = null;
-                            }
-                        }
-                    }*/
                 }                        
             }
             
@@ -533,19 +507,48 @@ public class MaBot implements TradeBot {
    	            depth = provider.getDepth(_tradeSite, _tradedCurrencyPair);
                 buyPrice = depth.getBuy(0).getPrice();
                 sellPrice = depth.getSell(0).getPrice();
-                BigDecimal meanPrice = buyPrice.add(sellPrice).divide(TWO, MathContext.DECIMAL128);
-                shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
-                longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
-                updateMacdSignals(shortEma, longEma, timeUtils.getCurrentGMTTimeMicros());                
-                relMacd = macd.divide(meanPrice, MathContext.DECIMAL128).multiply(THOUSAND);
-                deltaMacd = macd.subtract(lastMacd);
-               
+                if (!proxyEnabled)
+                {
+                    BigDecimal meanPrice = buyPrice.add(sellPrice).divide(TWO, MathContext.DECIMAL128);
+                    Price shortEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_SHORT_INTERVAL);
+                    Price longEma = analyzer.getEMA(_tradeSite, _tradedCurrencyPair, EMA_LONG_INTERVAL);
+                    updateMacdSignals(shortEma, longEma, timeUtils.getCurrentGMTTimeMicros());                
+                    relMacd = macd.divide(meanPrice, MathContext.DECIMAL128).multiply(THOUSAND);
+                    deltaRelMacd = relMacd.subtract(lastRelMacd);
+                }
+                else
+                {
+                    getSignalsFromProxy();
+                }
+
                 /* should a short EMA rise too high above target buy price, move stop loss up too */
-                if (shortEma.compareTo(targetBuyPrice) > 0)
+                /*if (shortEma.compareTo(targetBuyPrice) > 0)
                 {
                     stopLossPrice = sellPrice.multiply(stopLossFactor, MathContext.DECIMAL128);
                     logger.info("*** Stop Loss Adjusted ***");
+                }*/
+            }
+
+            private void getSignalsFromProxy()
+            {
+                String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
+                String pair = 
+                        _tradedCurrencyPair.getPaymentCurrency().getName().toUpperCase() +
+                        "_" +
+                        _tradedCurrencyPair.getCurrency().getName().toUpperCase();
+                JSONArray ticker = JSONObject.fromObject(requestResult).getJSONArray(pair);
+
+                macd = new Price(ticker.getString(1));
+                relMacd = new Price(ticker.getString(2));
+                if (deltaRelMacd == null)
+                {
+                    deltaRelMacd = new Price("0");
                 }
+                else
+                {
+                    deltaRelMacd = relMacd.subtract(deltaRelMacd);
+                }
+                lastRelMacd = relMacd;
             }
 
             private void doTrade()
@@ -553,14 +556,10 @@ public class MaBot implements TradeBot {
                 order = null;
                 if (isTimeToBuy()) 
                 {
-                    //oldCurrencyAmount = getFunds(currency);
-                    //oldPaymentCurrencyAmount = getFunds(paymentCurrency);
  			        order = buyCurrency(depth);
                 }
                 else if (isStopLoss() || isMinProfit()) 
                 {
-                    //oldCurrencyAmount = getFunds(currency);
-                    //oldPaymentCurrencyAmount = getFunds(paymentCurrency);
 	                order = sellCurrency(depth); 
                 }
                 if (order != null && order.getStatus() != OrderStatus.ERROR)
@@ -770,16 +769,16 @@ public class MaBot implements TradeBot {
                 {
                     logger.info(String.format("buy              |                %16s                |", priceFormat.format(buyPrice)));
                 }
-                logger.info(String.format("sell             |               %16f                 |", priceFormat.format(sellPrice)));
-                logger.info(String.format("ema-%3s          |               %16f                 |", EMA_SHORT_INTERVAL, priceFormat.format(shortEma)));
-                logger.info(String.format("ema-%3s          |               %16f                 |", EMA_LONG_INTERVAL, priceFormat.format(longEma)));
-                logger.info(String.format("macd-line        |               %16s                 |", macdFormat.format(macdLine)));
-                logger.info(String.format("macd-signal      |               %16s                 |", macdFormat.format(macdSignalLine)));
-                logger.info(String.format("%s             |  [%8s]   %16s                 |", macdSymbol, relMacdFormat.format(relMacd), macdFormat.format(macd)));
-                logger.info(String.format("  +-prev         |               %16s                 |", macdFormat.format(lastMacd)));
-                logger.info(String.format("  +-delta        |               %16s                 |", macdFormat.format(deltaMacd)));
+                logger.info(String.format("sell             |                %16s                |", priceFormat.format(sellPrice)));
+                //logger.info(String.format("ema-%3s          |               %16f                 |", EMA_SHORT_INTERVAL, priceFormat.format(shortEma)));
+                //logger.info(String.format("ema-%3s          |               %16f                 |", EMA_LONG_INTERVAL, priceFormat.format(longEma)));
+                //logger.info(String.format("macd-line        |               %16s                 |", macdFormat.format(macdLine)));
+                //logger.info(String.format("macd-signal      |               %16s                 |", macdFormat.format(macdSignalLine)));
+                logger.info(String.format("%s             |  [%16s]   %8s                 |", macdSymbol, macdFormat.format(macd), relMacdFormat.format(relMacd)));
+                logger.info(String.format("  +-prev (rel.)  |                       %8s                 |", macdFormat.format(lastRelMacd)));
+                logger.info(String.format("  +-delta (rel.) |                       %8s                 |", macdFormat.format(deltaRelMacd)));
                 logger.info(              "-----------------+------------------------------------------------+");
-                lastMacd = macd;
+                //lastRelMacd = relMacd;
             }
 
             private void sleepUntilNextCycle(long t1)

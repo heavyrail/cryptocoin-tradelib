@@ -76,4 +76,9 @@ public class PoloniexCurrencyImpl implements Currency
         return name;
     }
 
+    public String toString()
+    {
+        return name;
+    }
+
 }
