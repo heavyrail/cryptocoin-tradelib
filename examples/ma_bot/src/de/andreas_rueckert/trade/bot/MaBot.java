@@ -90,7 +90,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.01");
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.00000001");
 
     private final static BigDecimal MIN_TRADE_BTC_AMOUNT = new Amount("0.0001");
 
@@ -196,7 +196,7 @@ public class MaBot implements TradeBot {
     proxy = _tradeSiteUserAccount.getProxy();
     proxyEnabled = proxy != null && proxy.length() > 0;
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("NOBL<=>BTC");
+	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("USDE<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -344,6 +344,7 @@ public class MaBot implements TradeBot {
                         calculateSignals();
                         doTrade();
                         reportCycleSummary();
+                        lastRelMacd = relMacd;
                     }
                     catch (Exception e)
                     {
@@ -489,13 +490,17 @@ public class MaBot implements TradeBot {
                         pendingOrderId = null;
                         lastDeal = pendingOrder;
                         lastPrice = pendingOrder.getPrice();
-                        if (pendingOrder.getOrderType() == OrderType.BUY)
+                        OrderStatus status = pendingOrder.getStatus();
+                        if (pendingOrder.getOrderType() == OrderType.BUY && (
+                                 status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED))
                         {
+                            logger.info("adjusting stop loss and target buy prices");
                             stopLossPrice = lastPrice.multiply(stopLossFactor);
                             targetBuyPrice = lastPrice.multiply(sellFactor);
                         }
                         else
                         {
+                            logger.info("stop loss and target buy prices remain intact");
                             // TODO
                         }
                     }
@@ -548,7 +553,6 @@ public class MaBot implements TradeBot {
                 {
                     deltaRelMacd = relMacd.subtract(deltaRelMacd);
                 }
-                lastRelMacd = relMacd;
             }
 
             private void doTrade()
@@ -775,10 +779,12 @@ public class MaBot implements TradeBot {
                 //logger.info(String.format("macd-line        |               %16s                 |", macdFormat.format(macdLine)));
                 //logger.info(String.format("macd-signal      |               %16s                 |", macdFormat.format(macdSignalLine)));
                 logger.info(String.format("%s             |  [%16s]   %8s                 |", macdSymbol, macdFormat.format(macd), relMacdFormat.format(relMacd)));
-                logger.info(String.format("  +-prev (rel.)  |                       %8s                 |", macdFormat.format(lastRelMacd)));
-                logger.info(String.format("  +-delta (rel.) |                       %8s                 |", macdFormat.format(deltaRelMacd)));
+                if (lastRelMacd != null)
+                {
+                    logger.info(String.format("  +-prev (rel.)  |                       %8s                 |", macdFormat.format(lastRelMacd)));
+                    logger.info(String.format("  +-delta (rel.) |                       %8s                 |", macdFormat.format(deltaRelMacd)));
+                }
                 logger.info(              "-----------------+------------------------------------------------+");
-                //lastRelMacd = relMacd;
             }
 
             private void sleepUntilNextCycle(long t1)
