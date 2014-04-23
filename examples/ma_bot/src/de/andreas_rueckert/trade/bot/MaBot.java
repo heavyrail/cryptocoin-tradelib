@@ -90,10 +90,7 @@ public class MaBot implements TradeBot {
     /**
      * The minimal trade volume.
      */
-    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.00000001");
-
-    private final static BigDecimal MIN_TRADE_BTC_AMOUNT = new Amount("0.0001");
-
+    private final static BigDecimal MIN_TRADE_AMOUNT = new Amount("0.0001");
 
     /**
      * The interval to update the bot activities.
@@ -196,7 +193,7 @@ public class MaBot implements TradeBot {
     proxy = _tradeSiteUserAccount.getProxy();
     proxyEnabled = proxy != null && proxy.length() > 0;
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("USDE<=>BTC");
+	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("WC<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -625,27 +622,28 @@ public class MaBot implements TradeBot {
                 int i = 0;
                 DepthOrder depthOrder = null;
                 Amount availableAmount = null;
+                Price sellPrice = null;
+                BigDecimal payCurrencyAmount = null;
                 do
                 {
                     depthOrder = depth.getSell(i++);
                     availableAmount = depthOrder.getAmount();
+                    sellPrice = depthOrder.getPrice();
+                    payCurrencyAmount = availableAmount.multiply(sellPrice); 
                 }
-                while (i < sellOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
+                while (i < sellOrders && payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
                 
-                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0)
+                if (payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0)
                 {
 		            // Now check, if we have any funds to buy something.
-                    Price sellPrice = depthOrder.getPrice();
 			        Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
 
-			        // If the volume is bigger than the min volume, do the actual trade.
-			        if (buyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+		            // Compute the actual amount to trade.
+				    Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
+
+				    if (orderAmount.multiply(sellPrice).compareTo(MIN_TRADE_AMOUNT) >= 0)
                     {
-
-			            // Compute the actual amount to trade.
-				        Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
-
-				        // Create a buy order...
+                        // Create a buy order...
 			            String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.BUY, sellPrice, _tradedCurrencyPair, orderAmount));
                         return orderBook.getOrder(orderId);
@@ -657,7 +655,7 @@ public class MaBot implements TradeBot {
                 }   
                 else
                 {
-                    logger.info("amount market can sell at this price is lower than minimum!");
+                    logger.info("amount market can sell is lower than minimum!");
                 }
                 return null;
             }
@@ -671,27 +669,28 @@ public class MaBot implements TradeBot {
                 int i = 0;
                 DepthOrder depthOrder = null;
                 Amount availableAmount = null;
+                Price buyPrice = null;
+                BigDecimal payCurrencyAmount = null;
                 do
                 {
                     depthOrder = depth.getBuy(i++);
                     availableAmount = depthOrder.getAmount();
+                    buyPrice = depthOrder.getPrice();
+                    payCurrencyAmount = availableAmount.multiply(buyPrice); 
                 }
-                while (i < buyOrders && availableAmount.compareTo(MIN_TRADE_AMOUNT) < 0);            
+                while (i < buyOrders && payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) < 0);            
 
-                if (availableAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                if (payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
                 {
 		            // Now check, if we have any funds to sell.
 			        Amount sellAmount = new Amount(getFunds(currency));
 
-			        // If the volume is bigger than the min volume, do the actual trade.
-                    if (sellAmount.compareTo(MIN_TRADE_AMOUNT) >= 0) 
+                    // Compute the actual amount to trade.
+                    Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
+
+                    if (sellAmount.multiply(buyPrice).compareTo(MIN_TRADE_AMOUNT) >= 0) 
                     {
-
-                        // Compute the actual amount to trade.
-	                    Amount orderAmount = availableAmount.compareTo(sellAmount) < 0 ? availableAmount : sellAmount;
-
 	                    // Create a sell order...
-                        Price buyPrice = depthOrder.getPrice();
 		                String orderId = orderBook.add(OrderFactory.createCryptoCoinTradeOrder(
                                 _tradeSite, _tradeSiteUserAccount, OrderType.SELL, buyPrice, _tradedCurrencyPair, orderAmount));
                         return orderBook.getOrder(orderId);
@@ -703,7 +702,7 @@ public class MaBot implements TradeBot {
 		        }
                 else
                 {
-                    logger.info("funds market can buy at this price are lower than minimum!");
+                    logger.info("funds market can buy price are lower than minimum!");
                 }
                 return null;
             }
