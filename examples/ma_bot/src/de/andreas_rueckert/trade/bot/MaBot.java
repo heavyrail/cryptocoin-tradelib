@@ -80,7 +80,9 @@ public class MaBot implements TradeBot {
     /**
      * The minimal profit
      */
-    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.07588412");
+    //private final static BigDecimal MIN_PROFIT = new BigDecimal("0.07568430"); // sf=1.08
+    private final static BigDecimal MIN_PROFIT = new BigDecimal("0.08564436"); // sf=1.09
+    //private final static BigDecimal MIN_PROFIT = new BigDecimal("0.09560440"); // sf=1.10
 
     /**
      * The maximum loss
@@ -193,7 +195,7 @@ public class MaBot implements TradeBot {
     proxy = _tradeSiteUserAccount.getProxy();
     proxyEnabled = proxy != null && proxy.length() > 0;
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("WC<=>BTC");
+	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("CINNI<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
@@ -301,16 +303,11 @@ public class MaBot implements TradeBot {
         // Create a ticker thread.
         _updateThread = new Thread() 
         {
-
-            //Price shortEma;
-            //Price longEma;
             ArrayList<Trade> macdCache;
             BigDecimal macd;
             Price macdLine;
             BigDecimal macdSignalLine;
-            //BigDecimal lastMacd;
             BigDecimal lastRelMacd;
-            //BigDecimal deltaMacd;
             BigDecimal deltaRelMacd;
             BigDecimal relMacd;
             Price buyPrice;
@@ -542,13 +539,13 @@ public class MaBot implements TradeBot {
 
                 macd = new Price(ticker.getString(1));
                 relMacd = new Price(ticker.getString(2));
-                if (deltaRelMacd == null)
+                if (deltaRelMacd == null || lastRelMacd == null)
                 {
                     deltaRelMacd = new Price("0");
                 }
                 else
                 {
-                    deltaRelMacd = relMacd.subtract(deltaRelMacd);
+                    deltaRelMacd = relMacd.subtract(lastRelMacd);
                 }
             }
 
@@ -713,12 +710,12 @@ public class MaBot implements TradeBot {
                 if (order != null)
                 {
                     logger.info(String.format("current deal     | %s", order));
-                    macdSymbol = "Macd";
+                    macdSymbol = "[ Macd x 1000 ]";
                 }
                 else
                 {
                     logger.info("current deal     |");
-                    macdSymbol = "macd";
+                    macdSymbol = "[ macd x 1000 ]";
                 }
                 if (lastDeal != null)
                 {
@@ -748,36 +745,36 @@ public class MaBot implements TradeBot {
                 double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
                 double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
                 
-                DecimalFormat amountFormat = new DecimalFormat("#########.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
-                DecimalFormat priceFormat = new DecimalFormat("####.###########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
-                DecimalFormat macdFormat = new DecimalFormat("+###.###########;-###.###########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+                DecimalFormat amountFormat = new DecimalFormat("########0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+                DecimalFormat priceFormat = new DecimalFormat("###0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+                DecimalFormat macdFormat = new DecimalFormat("+###.########;-###.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
                 DecimalFormat relMacdFormat = new DecimalFormat("+###.###;-###.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));      
                 
                 logger.info(String.format("days uptime      |                   %12s                 |", uptimeDays.setScale(3, RoundingMode.CEILING)));
-                logger.info(String.format("initial ( %4s ) |                %18s              |", payCurrency, amountFormat.format(initialAssets)));
-                logger.info(String.format("current ( %4s ) |                %18s              |", payCurrency, amountFormat.format(currentAssets)));
-                logger.info(String.format("profit  ( %4s ) |                %18s              |", payCurrency, amountFormat.format(absProfit)));
+                logger.info(String.format("initial ( %5s) |             %18s                 |", payCurrency, amountFormat.format(initialAssets)));
+                logger.info(String.format("current ( %5s) |             %18s                 |", payCurrency, amountFormat.format(currentAssets)));
+                logger.info(String.format("profit  ( %5s) |             %18s                 |", payCurrency, amountFormat.format(absProfit)));
                 logger.info(String.format("profit in %%      |                     %+10.1f     %+10.1f* |", profitPercent, refProfitPercent));
                 logger.info(String.format("        +-day    |                     %+10.1f     %+10.1f* |", (profitPerDay - 1) * 100, (refProfitPerDay - 1) * 100));
                 logger.info(String.format("        +-month  |                     %+10.1f     %+10.1f* |", (profitPerMonth - 1) * 100, (refProfitPerMonth - 1) * 100));
 
-                logger.info(String.format("%4s             |               %16s                 |", currency, amountFormat.format(currencyValue)));
-                logger.info(String.format("%4s             |               %16s                 |", payCurrency, amountFormat.format(payCurrencyValue)));
+                logger.info(String.format("%5s            |               %16s                 |", currency, amountFormat.format(currencyValue)));
+                logger.info(String.format("%5s            |               %16s                 |", payCurrency, amountFormat.format(payCurrencyValue)));
                 if (targetBuyPrice != null)
                 {
-                    logger.info(String.format("buy              |%16s%16s%16s|",
+                    logger.info(String.format("buy              |  %13s   %13s   %13s |",
                                 priceFormat.format(stopLossPrice), priceFormat.format(buyPrice), priceFormat.format(targetBuyPrice)));
                 }
                 else
                 {
-                    logger.info(String.format("buy              |                %16s                |", priceFormat.format(buyPrice)));
+                    logger.info(String.format("buy              |                  %13s                 |", priceFormat.format(buyPrice)));
                 }
-                logger.info(String.format("sell             |                %16s                |", priceFormat.format(sellPrice)));
+                logger.info(String.format("sell             |                  %13s                 |", priceFormat.format(sellPrice)));
                 //logger.info(String.format("ema-%3s          |               %16f                 |", EMA_SHORT_INTERVAL, priceFormat.format(shortEma)));
                 //logger.info(String.format("ema-%3s          |               %16f                 |", EMA_LONG_INTERVAL, priceFormat.format(longEma)));
                 //logger.info(String.format("macd-line        |               %16s                 |", macdFormat.format(macdLine)));
                 //logger.info(String.format("macd-signal      |               %16s                 |", macdFormat.format(macdSignalLine)));
-                logger.info(String.format("%s             |  [%16s]   %8s                 |", macdSymbol, macdFormat.format(macd), relMacdFormat.format(relMacd)));
+                logger.info(String.format("%s  | [%13s ]      %8s                 |", macdSymbol, macdFormat.format(macd), relMacdFormat.format(relMacd)));
                 if (lastRelMacd != null)
                 {
                     logger.info(String.format("  +-prev (rel.)  |                       %8s                 |", macdFormat.format(lastRelMacd)));
