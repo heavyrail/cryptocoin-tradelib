@@ -195,7 +195,7 @@ public class MaBot implements TradeBot {
     proxy = _tradeSiteUserAccount.getProxy();
     proxyEnabled = proxy != null && proxy.length() > 0;
     _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("CINNI<=>BTC");
+	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("DRK<=>BTC");
     payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
     currency = _tradedCurrencyPair.getCurrency();
     orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();

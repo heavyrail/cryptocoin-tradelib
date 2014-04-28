@@ -33,6 +33,9 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+
+// concerning java.util we have to explicitly list all imported classes instead of using * wildcard
+// it is because of otherwise java.util.Currency conflicts with Andreas Rueckert's Currency class
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -58,30 +61,10 @@ import de.andreas_rueckert.MissingAccountDataException;
 import de.andreas_rueckert.NotYetImplementedException;
 import de.andreas_rueckert.persistence.PersistentProperty;
 import de.andreas_rueckert.persistence.PersistentPropertyList;
-import de.andreas_rueckert.trade.CryptoCoinTrade;
-import de.andreas_rueckert.trade.Currency;
-//import de.andreas_rueckert.trade.CurrencyImpl;
-import de.andreas_rueckert.trade.CurrencyNotSupportedException;
-import de.andreas_rueckert.trade.CurrencyPair;
-//import de.andreas_rueckert.trade.CurrencyPairImpl;
-import de.andreas_rueckert.trade.Depth;
-import de.andreas_rueckert.trade.Price;
-import de.andreas_rueckert.trade.TradeDataNotAvailableException;
-import de.andreas_rueckert.trade.account.CryptoCoinAccount;
-import de.andreas_rueckert.trade.account.CryptoCoinAccountImpl;
-import de.andreas_rueckert.trade.account.TradeSiteAccount;
-import de.andreas_rueckert.trade.account.TradeSiteAccountImpl;
-import de.andreas_rueckert.trade.order.CryptoCoinOrderBook;
-import de.andreas_rueckert.trade.order.DepositOrder;
-import de.andreas_rueckert.trade.order.OrderNotInOrderBookException;
-import de.andreas_rueckert.trade.order.OrderStatus;
-import de.andreas_rueckert.trade.order.OrderType;
-import de.andreas_rueckert.trade.order.SiteOrder;
-import de.andreas_rueckert.trade.order.WithdrawOrder;
-import de.andreas_rueckert.trade.site.TradeSite;
-import de.andreas_rueckert.trade.site.TradeSiteImpl;
-import de.andreas_rueckert.trade.site.TradeSiteRequestType;
-import de.andreas_rueckert.trade.site.TradeSiteUserAccount;
+import de.andreas_rueckert.trade.*;
+import de.andreas_rueckert.trade.account.*;
+import de.andreas_rueckert.trade.order.*;
+import de.andreas_rueckert.trade.site.*;
 import de.andreas_rueckert.util.HttpUtils;
 import de.andreas_rueckert.util.LogUtils;
 import de.andreas_rueckert.util.TimeUtils;
@@ -252,7 +235,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 			while(itPairs.hasNext()){
 				Object current = itPairs.next();
 				pair = (String) current;
-				//format is btc_usd, nvc_usd, ftc_btc, etc...
 				currencyDetail = pair.split("_");
 				currency = currencyDetail[1].toUpperCase();
 				paymentCurrency = currencyDetail[0].toUpperCase();
@@ -494,8 +476,13 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
     public synchronized OrderStatus executeOrder(SiteOrder order) 
     {
         OrderType orderType = order.getOrderType();  // Get the type of this order.
+        JSONObject jsonResponse = null;
 
-	    if ((orderType == OrderType.BUY) || ( orderType == OrderType.SELL)) 
+        if (orderType == OrderType.DEPOSIT) 
+        {  // This is a deposit order..
+	        throw new NotYetImplementedException( "Executing deposits is not yet implemented for " + this.getName());
+	    }
+        else if ((orderType == OrderType.BUY) || ( orderType == OrderType.SELL)) 
         {  // If this is a buy or sell order, run the trade code.
 
 	        // The parameters for the HTTP post call.
@@ -507,42 +494,44 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
                     order.getCurrencyPair().getPaymentCurrency().getName().toUpperCase() + "_" +
                     order.getCurrencyPair().getCurrency().getName().toUpperCase());  
 
-	        JSONObject jsonResponse = authenticatedHTTPRequest(
+	        jsonResponse = authenticatedHTTPRequest(
                     order.getOrderType() == OrderType.BUY ? "buy" : "sell", parameter, order.getTradeSiteUserAccount());
 
-	        if (jsonResponse == null) 
+		    // Try to get and store the site id for the order first, so we can access the order later.
+            if (jsonResponse != null && jsonResponse.has("orderNumber"))
             {
-		        return OrderStatus.ERROR;
-	        } 
-            else
-            {
-		        // Try to get and store the site id for the order first, so we can access the order later.
-                if (jsonResponse.has("orderNumber"))
-                {
-		            long poloniexOrderId = jsonResponse.getLong("orderNumber");
-		            order.setSiteId("" + poloniexOrderId);  // Store the id in the order.
-                    order.setStatus(OrderStatus.PARTIALLY_FILLED);
-		            return order.getStatus();
-                }
-                else
-                {
-                    if (jsonResponse.has("error"))
-                    {
-                        System.out.println(jsonResponse.getString("error"));
-                    }
-                    return OrderStatus.ERROR;
-                }
-	        }
+		        long poloniexOrderId = jsonResponse.getLong("orderNumber");
+		        order.setSiteId("" + poloniexOrderId);  // Store the id in the order.
+                order.setStatus(OrderStatus.PARTIALLY_FILLED);
+		        return order.getStatus();
+            }
 	    } 
-        else if (orderType == OrderType.DEPOSIT) 
-        {  // This is a deposit order..
-	        throw new NotYetImplementedException( "Executing deposits is not yet implemented for " + this.getName());
-	    }
         else if (orderType == OrderType.WITHDRAW) 
         {  // This is a withdraw order.
-	        throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
+	        //throw new NotYetImplementedException( "Executing withdraws is not yet implemented for " + this.getName());
+ 	        // The parameters for the HTTP post call.
+	        HashMap<String, String> parameter = new HashMap<String, String>();
+	    
+	        parameter.put("amount", formatAmount(order.getAmount()));
+	        parameter.put("currency", order.getCurrencyPair().getCurrency().getName().toUpperCase());  
+            parameter.put("address", ((CryptoCoinAccount) ((WithdrawOrderImpl) order).getAccount()).getCryptoCoinAddress());
+
+	        jsonResponse = authenticatedHTTPRequest("withdraw", parameter, order.getTradeSiteUserAccount());
+
+		    // Try to get and store the site id for the order first, so we can access the order later.
+            if (jsonResponse != null && jsonResponse.has("response"))
+            {
+                order.setStatus(OrderStatus.FILLED);
+		        return order.getStatus();
+            }
 	    }
-	    return null;  // An error occured, or this is an unknow order type?
+
+        if (jsonResponse != null && jsonResponse.has("error"))
+        {
+            System.out.println(jsonResponse.getString("error"));
+        }
+        return OrderStatus.ERROR;
+
     }
 
     /**
@@ -610,7 +599,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @return The accounts with the current balance as a collection of Account objects, or null if the request failed.
      */
-    public Collection<TradeSiteAccount> getAccountsViaHTML() {
+    /*public Collection<TradeSiteAccount> getAccountsViaHTML() {
 	
 	String url = "https://" + PoloniexClient.DOMAIN + "/ajax/" + "profile.php";
 
@@ -642,7 +631,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	}
 
 	return null;  // Indicate an error.
-    }
+    }*/
 
     /**
      * Get a page, that requires a logged in user.
@@ -651,7 +640,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
      *
      * @see http://jsoup.org/cookbook/input/load-document-from-url
      */
-    private void getAuthenticatedPage( String URL) {
+    /*private void getAuthenticatedPage( String URL) {
 
 	try {
 	    // Do a HTTP post with the user data to fetch the page.
@@ -663,7 +652,7 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	} catch( IOException ioe) {
 	    System.err.println( "Cannot post authenticated page to poloniex.com: " + ioe.toString());
 	}
-    }
+    }*/
 
     /**
      * Return the current reference currency of the user.

@@ -93,8 +93,17 @@
         <java jar="${bot.jarfile}" fork="true"/>
     </target>
 
+    <macrodef name="set.timestamp">
+        <sequential>
+            <tstamp>
+                <format property="current.time" pattern="yyMMddHHmm"/>
+            </tstamp>
+        </sequential>
+    </macrodef>
+
     <target name="run" depends="dist">
-        <record name="mabot.log" action="start"/>
+        <set.timestamp/>
+        <record name="mabot.${current.time}.log" action="start"/>
         <java jar="${bot.jarfile}" fork="true">
             <arg value="-server"/>
             <arg value="-startbot"/>
