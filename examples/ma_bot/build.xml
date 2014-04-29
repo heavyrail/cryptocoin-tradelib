@@ -107,7 +107,7 @@
         <java jar="${bot.jarfile}" fork="true">
             <arg value="-server"/>
             <arg value="-startbot"/>
-            <arg value="MaBot"/>
+            <arg value="mabot.cfg"/>
         </java>
         <record name="mabot.log" action="stop"/>
     </target>

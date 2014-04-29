@@ -867,11 +867,11 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
                 {     // If the order book returned an order,
                     result.add(currentOrder);  // add it to the result buffer.
 		        }
-                else
+                /*else
                 {  // It seems, this order is not in the order book. I can consider this an error at the moment,
 		          // since every order should go through the order book.
 		            throw new OrderNotInOrderBookException("Error: poloniex order with site id " + currentSiteId + " is not in order book!");
-		        }
+		        }*/
 	        }
 	        return result;  // Return the buffer with the orders.	    
 	    } 

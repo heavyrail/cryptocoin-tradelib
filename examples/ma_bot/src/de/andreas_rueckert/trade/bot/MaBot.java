@@ -75,6 +75,8 @@ import net.sf.json.JSONObject;
  */
 public class MaBot implements TradeBot {
 
+    enum State {TARGETING, HUNGRY, TRADING, DUMPING};
+
     // Static variables
 
     /**
@@ -119,6 +121,10 @@ public class MaBot implements TradeBot {
     private final BigDecimal THOUSAND = new BigDecimal("1000");
 
     // Instance variables
+    
+    State state;
+
+    String configFilename;
 
     /**
      * The user inface of this bot.
@@ -171,34 +177,35 @@ public class MaBot implements TradeBot {
     /**
      * Create a new bot instance.
      */
-    public MaBot() {
-
-	// Set trade site and currency pair to trade.
-    StringBuilder configLine = new StringBuilder();
-    try
+    public MaBot(String configFilename) 
     {
-        Scanner s = new Scanner(new File("mabot.cfg"));
-        if (s.hasNextLine())
+        this.configFilename = configFilename;
+        StringBuilder configLine = new StringBuilder();
+        try
         {
-            configLine.append(s.nextLine());
+            Scanner s = new Scanner(new File(configFilename));
+            if (s.hasNextLine())
+            {
+                configLine.append(s.nextLine());
+            }
         }
-    }
-    catch (IOException e)
-    {
-        System.exit(-1);
-    }
-    _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
-    _tradeSite = _tradeSiteUserAccount.getTradeSite();    
-    PersistentPropertyList settings = new PersistentPropertyList();
-    settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
-    settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
-    proxy = _tradeSiteUserAccount.getProxy();
-    proxyEnabled = proxy != null && proxy.length() > 0;
-    _tradeSite.setSettings(settings);
-	_tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("DRK<=>BTC");
-    payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
-    currency = _tradedCurrencyPair.getCurrency();
-    orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
+        catch (IOException e)
+        {
+            System.exit(-1);
+        }
+        _tradeSiteUserAccount = TradeSiteUserAccount.fromPropertyValue(configLine.toString());
+        _tradeSite = _tradeSiteUserAccount.getTradeSite();    
+        PersistentPropertyList settings = new PersistentPropertyList();
+        settings.add(new PersistentProperty("Key", null, _tradeSiteUserAccount.getAPIkey(), 0));
+        settings.add(new PersistentProperty("Secret", null, _tradeSiteUserAccount.getSecret(), 0));
+        proxy = _tradeSiteUserAccount.getProxy();
+        proxyEnabled = proxy != null && proxy.length() > 0;
+        _tradeSite.setSettings(settings);
+        orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
+    
+        _tradedCurrencyPair = PoloniexCurrencyPairImpl.findByString("DRK<=>BTC");
+        payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
+        currency = _tradedCurrencyPair.getCurrency();
     }
     
 
@@ -233,8 +240,9 @@ public class MaBot implements TradeBot {
      *
      * @return The name of this bot.
      */
-    public String getName() {
-        return "MovingAverage";
+    public String getName() 
+    {
+        return configFilename;
     }
 
     /**

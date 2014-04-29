@@ -95,29 +95,30 @@ public class BotRunner implements ListSelectionListener {
      *
      * @param args The commandline arguments.
      */
-    private BotRunner( String [] args) {
+    private BotRunner(String [] args) 
+    {
 
-	// Register trade bots.
-	registerTradeBot( new MaBot());
-
-	// Parse the commandline.
-	if( parseCommandLine( args)) {
-
-	    // If the app is not in server mode, create a GUI.
-	    if( ! _serverMode) {
-
-		createGUI();
-	    }
-        else
+	    // Parse the commandline.
+	    if (parseCommandLine(args))
         {
-            /*for (TradeBot bot : _botsToStart)
+
+	        // If the app is not in server mode, create a GUI.
+	        if (!_serverMode)
             {
-                bot.start();
-            }*/
-            TradeBot bot = new MaBot();
-            bot.start();
-        }
-	}
+		        createGUI();
+	        }
+            else
+            {
+                for (Object botConfigFilename : _botsToStart.toArray())
+                {
+                    registerTradeBot(new MaBot((String) botConfigFilename));
+                }
+                for (TradeBot bot : _registeredTradeBots.values())
+                {
+                    bot.start();
+                }
+            }
+	    }
     }
 
 
