@@ -25,52 +25,45 @@
 
 package de.andreas_rueckert.trade.bot;
 
-import de.andreas_rueckert.trade.site.TradeSiteUserAccount;
+import de.andreas_rueckert.persistence.PersistentProperty;
+import de.andreas_rueckert.persistence.PersistentPropertyList;
+import de.andreas_rueckert.trade.*;
 import de.andreas_rueckert.trade.account.TradeSiteAccount;
-import de.andreas_rueckert.trade.Amount;
 import de.andreas_rueckert.trade.bot.ui.MaBotUI;
 import de.andreas_rueckert.trade.chart.ChartProvider;
 import de.andreas_rueckert.trade.chart.ChartAnalyzer;
-import de.andreas_rueckert.trade.Currency;
-import de.andreas_rueckert.trade.CurrencyPair;
-import de.andreas_rueckert.trade.CurrencyPairImpl;
-import de.andreas_rueckert.trade.Depth;
-
-import de.andreas_rueckert.trade.Trade;
-import de.andreas_rueckert.trade.TradeType;
-import de.andreas_rueckert.trade.order.CryptoCoinOrderBook;
-import de.andreas_rueckert.trade.order.Order;
-import de.andreas_rueckert.trade.order.SiteOrder;
-
-import de.andreas_rueckert.trade.order.OrderFactory;
-import de.andreas_rueckert.trade.order.OrderType;
-import de.andreas_rueckert.trade.order.OrderStatus;
-import de.andreas_rueckert.trade.order.DepthOrder;
-import de.andreas_rueckert.trade.Price;
+import de.andreas_rueckert.trade.order.*;
 import de.andreas_rueckert.trade.site.TradeSite;
+import de.andreas_rueckert.trade.site.TradeSiteUserAccount;
+import de.andreas_rueckert.trade.site.poloniex.client.PoloniexClient;
+import de.andreas_rueckert.trade.site.poloniex.client.PoloniexCurrencyPairImpl;
 import de.andreas_rueckert.util.*;
 
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.math.RoundingMode;
-import java.util.*;
 import java.io.IOException;
 import java.io.File;
 import java.io.RandomAccessFile;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
+import java.lang.management.ManagementFactory;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 
-import de.andreas_rueckert.trade.site.poloniex.client.PoloniexClient;
-import de.andreas_rueckert.trade.site.poloniex.client.PoloniexCurrencyPairImpl;
-import org.apache.log4j.Logger;
-import org.apache.log4j.Level;
-import de.andreas_rueckert.persistence.PersistentProperty;
-import de.andreas_rueckert.persistence.PersistentPropertyList;
+// we do not use wildcard * on java.util imports for java.util.Currency to not conflict with Andreas Rueckert's Currency class
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Scanner;
 
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 /**
  * This is a simple bot to demonstrate the usage of the cryptocoin tradelib.
@@ -128,9 +121,13 @@ public class MaBot implements TradeBot {
     private final int MAX_HOT_BTC_PAIRS = 5;
     private final int MAX_HOT_LTC_PAIRS = 3;
 
+    private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
+
     // Instance variables
     
     State state;
+
+    Logger logger;
 
     String configFilename;
 
@@ -217,11 +214,18 @@ public class MaBot implements TradeBot {
         _tradeSite.setSettings(settings);
         orderBook = (CryptoCoinOrderBook) CryptoCoinOrderBook.getInstance();
         provider = ChartProvider.getInstance();
-        state = State.TARGETING;
+        logger = LogUtils.getInstance().getLogger();
+        logger.setLevel(Level.INFO);
+        setState(State.TARGETING);
     }
-    
 
     // Methods
+
+    private void setState(State newState)
+    {
+        state = newState;
+        logger.info("state is set to " + state.name());
+    }
 
    /**
      * Get the funds for a given currency.
@@ -239,6 +243,7 @@ public class MaBot implements TradeBot {
         } else {
             for( TradeSiteAccount account : currentFunds) {    // Loop over the accounts.
                 if( currency.equals( account.getCurrency())) {  // If this accounts has the requested currency.
+                    logger.info("we have a balance of " + account.getBalance());
                     return account.getBalance();                // Return it's balance.
                 }
             }
@@ -254,7 +259,8 @@ public class MaBot implements TradeBot {
      */
     public String getName() 
     {
-        return configFilename;
+        //return configFilename;
+        return ManagementFactory.getRuntimeMXBean().getName();
     }
 
     /**
@@ -315,9 +321,6 @@ public class MaBot implements TradeBot {
      */
     public void start() 
     {
-
-        final Logger logger = LogUtils.getInstance().getLogger();
-        logger.setLevel(Level.INFO);
         logger.info("MABot started");
        
         // Create a ticker thread.
@@ -352,17 +355,19 @@ public class MaBot implements TradeBot {
                         switch (state)
                         {
                             case TARGETING:
-                                initTrade();
-                                state = MaBot.State.HUNGRY;
+                                if (initTrade())
+                                {
+                                    setState(MaBot.State.HUNGRY);
+                                }
                                 break;
                             case HUNGRY:
-                                state = MaBot.State.TRADING;
+                                setState(MaBot.State.TRADING);
                                 break;
                             case TRADING:
                                 tradeCurrencies();
                                 break;
                             case DUMPING:
-                                state = MaBot.State.TARGETING;
+                                setState(MaBot.State.TARGETING);
                                 break;
                         }
                     }
@@ -390,22 +395,22 @@ public class MaBot implements TradeBot {
                 }
                 else
                 {
-                    RandomAccessFile file = null;
+                    RandomAccessFile pairsFile = null;
                     FileLock fileLock = null;
                     try
                     {
-                        file = new RandomAccessFile("choose.lock", "rw");
-                        FileChannel fileChannel = file.getChannel();
+                        pairsFile = new RandomAccessFile(TAKEN_PAIRS_FILE, "rw");
+                        FileChannel fileChannel = pairsFile.getChannel();
                         fileLock = fileChannel.tryLock();
                         if (fileLock != null)
                         {
                             logger.info("choose currency lock acquired");
                             String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
                             JSONObject signals = JSONObject.fromObject(requestResult);
-                            _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS);
+                            _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS, pairsFile);
                             if (_tradedCurrencyPair == null)
                             {
-                                _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS);
+                                _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS, pairsFile);
                             }
                             if (_tradedCurrencyPair != null)
                             {
@@ -438,7 +443,7 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
-            private CurrencyPair chooseRisingCurrency(JSONObject signals, String paymentCurrencyString, int maxPairs)
+            private CurrencyPair chooseRisingCurrency(JSONObject signals, String paymentCurrencyString, int maxPairs, RandomAccessFile pairsFile)
             {
                 CurrencyPair result = null;
                 String requestResult = HttpUtils.httpGet(proxy + "/hot_" + paymentCurrencyString + ".html");
@@ -449,11 +454,12 @@ public class MaBot implements TradeBot {
                     Iterator<String> keys = hotPair.keys();
                     keys.next();
                     String currencyString = keys.next();
-                    logger.info(currencyString);
-                    JSONArray hotSignals = signals.getJSONArray(currencyString);
+                    JSONArray hotSignals = signals.getJSONArray(paymentCurrencyString + "_" + currencyString);
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
-                    if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && !hasCurrencyPairTaken(currencyString, paymentCurrencyString))
+                    if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && !hasCurrencyPairTaken(currencyString, paymentCurrencyString, pairsFile))
                     {
+                        takePair(currencyString, paymentCurrencyString, pairsFile);
+                        logger.info(currencyString + " " + hotRelMacd);
                         result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
                         break;
                     }
@@ -461,11 +467,44 @@ public class MaBot implements TradeBot {
                 return result;
             }
 
-            private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString)
+            private void takePair(String currencyString, String paymentCurrencyString, RandomAccessFile pairsFile)
             {
+                //pairsFile.seek(pairsFile.length());
+                // TODO
+            }
+
+            private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString, RandomAccessFile pairsFile)
+            {
+                JSONObject takenPairs = null;
+                try
+                {
+                    long len = pairsFile.length();
+                    if (len > 0)
+                    {
+                        byte buf[] = new byte[(int) len];
+                        pairsFile.readFully(buf);
+                        takenPairs = JSONObject.fromObject(new String(buf));
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                catch (IOException e)
+                {
+                    logger.error("cannot parse taken pairs file");
+                    return true;
+                }
                 String pair = paymentCurrencyString + "_" + currencyString;
-    
-                return false; // TODO
+                String botName = takenPairs.getString(pair);
+                if (botName == null)
+                {
+                    return false;
+                }
+                else
+                {
+                    return true;
+                }
             }
 
             private void calculateCoeffs()
@@ -712,11 +751,16 @@ public class MaBot implements TradeBot {
                     payCurrencyAmount = availableAmount.multiply(sellPrice); 
                 }
                 while (i < sellOrders && payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) < 0);
-                
+               
+                System.out.println(payCurrencyAmount);
+
                 if (payCurrencyAmount.compareTo(MIN_TRADE_AMOUNT) >= 0)
                 {
-		            // Now check, if we have any funds to buy something.
-			        Amount buyAmount = new Amount(getFunds(payCurrency).divide(sellPrice, MathContext.DECIMAL128));
+
+                    // Now check, if we have any funds to buy something.
+                    BigDecimal funds = getFunds(payCurrency); 
+              
+			        Amount buyAmount = new Amount(funds.divide(sellPrice, MathContext.DECIMAL128));
 
 		            // Compute the actual amount to trade.
 				    Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;
@@ -925,6 +969,7 @@ public class MaBot implements TradeBot {
 
             private void sleepUntilNextCycle(long t1)
             {
+                logger.info("going to sleep");
                 long t2 = System.currentTimeMillis();
                 long sleepTime = (UPDATE_INTERVAL * 1000 - (t2 - t1)); 
                 if (sleepTime > 0)
@@ -938,6 +983,7 @@ public class MaBot implements TradeBot {
                         System.err.println( "Ticker or depth loop sleep interrupted: " + ie.toString());
                     }
                 }
+                logger.info("wake up, wake up, little sparrow");
             }
 	    };
 
