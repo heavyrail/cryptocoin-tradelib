@@ -109,8 +109,20 @@
             <arg value="-startbot"/>
             <arg value="mabot.cfg"/>
         </java>
-        <record name="mabot.log" action="stop"/>
+        <record name="mabot.${current.time}.log" action="stop"/>
     </target>
+
+    <target name="run1" depends="dist">
+        <set.timestamp/>
+        <record name="mabot.${current.time}.log" action="start"/>
+        <java jar="${bot.jarfile}" fork="true">
+            <arg value="-server"/>
+            <arg value="-startbot"/>
+            <arg value="mabot1.cfg"/>
+        </java>
+        <record name="mabot.${current.time}.log" action="stop"/>
+    </target>
+
 
     <target name="clean" description="clean up" >
         <!-- Delete the ${build} and ${dist} directory trees -->

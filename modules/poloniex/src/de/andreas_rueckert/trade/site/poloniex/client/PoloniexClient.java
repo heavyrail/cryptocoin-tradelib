@@ -569,7 +569,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 
 	// Try to get some info on the user (including the current funds).
 	JSONObject jsonResponse = authenticatedHTTPRequest( "returnBalances", null, userAccount);
-    System.out.println(jsonResponse);
 
 	if( jsonResponse != null) {
 
@@ -582,7 +581,6 @@ public class PoloniexClient extends TradeSiteImpl implements TradeSite {
 	    for( Iterator currencyIterator = jsonResponse.keys(); currencyIterator.hasNext(); ) {
 		
 		String currentCurrency = (String)currencyIterator.next();  // Get the next currency.
-        System.out.println(currentCurrency);
 		
 		BigDecimal balance = new BigDecimal( jsonResponse.getString( currentCurrency));  // Get the balance for this currency.
 

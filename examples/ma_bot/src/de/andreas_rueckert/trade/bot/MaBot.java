@@ -418,6 +418,7 @@ public class MaBot implements TradeBot {
                                 currency = _tradedCurrencyPair.getCurrency();
                                 return true;
                             }
+                            logger.info("no pair selected");
                         }
                     }
                     catch (IOException e)
@@ -456,55 +457,84 @@ public class MaBot implements TradeBot {
                     String currencyString = keys.next();
                     JSONArray hotSignals = signals.getJSONArray(paymentCurrencyString + "_" + currencyString);
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
-                    if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && !hasCurrencyPairTaken(currencyString, paymentCurrencyString, pairsFile))
+                    logger.info(paymentCurrencyString + "_" + currencyString + " " + hotRelMacd);
+                    JSONObject takenPairs = readTakenPairs(pairsFile);
+                    if (takenPairs != null)
                     {
-                        takePair(currencyString, paymentCurrencyString, pairsFile);
-                        logger.info(currencyString + " " + hotRelMacd);
-                        result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
-                        break;
+                        boolean pairAvailable = !hasCurrencyPairTaken(takenPairs, currencyString, paymentCurrencyString);
+                        if (pairAvailable)
+                        {
+                            logger.info("pair is available, let's take it");
+                        }
+                        else
+                        {
+                            logger.info("pair is already taken, skip it");
+                        }
+                        if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
+                        {
+                            if (takePair(takenPairs, pairsFile, currencyString, paymentCurrencyString))
+                            {
+                                logger.info(currencyString + " " + hotRelMacd);
+                                result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
+                            }
+                            else
+                            {
+                                logger.error("cannot write taken pair to file");
+                            }
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        logger.error("cannot parse taken pairs file");
                     }
                 }
                 return result;
             }
 
-            private void takePair(String currencyString, String paymentCurrencyString, RandomAccessFile pairsFile)
+            private boolean takePair(JSONObject takenPairs, RandomAccessFile pairsFile, String currencyString, String paymentCurrencyString)
             {
-                //pairsFile.seek(pairsFile.length());
-                // TODO
+                takenPairs.put(paymentCurrencyString + "_" + currencyString, getName());
+                try 
+                {
+                    pairsFile.setLength(0);
+                    pairsFile.write(takenPairs.toString().getBytes());
+                    //pairsFile.close();
+                    return true;
+                }
+                catch (IOException e)
+                {
+                    return false;
+                }
             }
 
-            private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString, RandomAccessFile pairsFile)
+            private JSONObject readTakenPairs(RandomAccessFile pairsFile)
             {
-                JSONObject takenPairs = null;
                 try
                 {
                     long len = pairsFile.length();
                     if (len > 0)
                     {
                         byte buf[] = new byte[(int) len];
+                        pairsFile.seek(0);
                         pairsFile.readFully(buf);
-                        takenPairs = JSONObject.fromObject(new String(buf));
+                        return JSONObject.fromObject(new String(buf));
                     }
                     else
                     {
-                        return false;
+                        return new JSONObject();
                     }
                 }
                 catch (IOException e)
                 {
-                    logger.error("cannot parse taken pairs file");
-                    return true;
+                    return null;
                 }
+            }
+
+            private boolean hasCurrencyPairTaken(JSONObject takenPairs, String currencyString, String paymentCurrencyString)
+            {
                 String pair = paymentCurrencyString + "_" + currencyString;
-                String botName = takenPairs.getString(pair);
-                if (botName == null)
-                {
-                    return false;
-                }
-                else
-                {
-                    return true;
-                }
+                return takenPairs.has(pair);
             }
 
             private void calculateCoeffs()
