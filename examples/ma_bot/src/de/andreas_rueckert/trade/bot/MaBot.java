@@ -472,6 +472,7 @@ public class MaBot implements TradeBot {
                         }
                         if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
                         {
+                            takenPairs.put(paymentCurrencyString + "_" + currencyString, getName());
                             if (takePair(takenPairs, pairsFile, currencyString, paymentCurrencyString))
                             {
                                 logger.info(currencyString + " " + hotRelMacd);
@@ -492,20 +493,40 @@ public class MaBot implements TradeBot {
                 return result;
             }
 
+            private boolean isPairStillHot(String currencyString, String paymentCurrencyString, int maxPairs)
+            {
+`               String requestResult = HttpUtils.httpGet(proxy + "/hot_" + paymentCurrencyString + ".html");
+                JSONArray pairs = JSONArray.fromObject(requestResult);
+                for (int i = 0; i < maxPairs; i++)
+                {
+                    JSONObject hotPair = pairs.getJSONObject(i);
+                    Iterator<String> keys = hotPair.keys();
+                    keys.next();
+                    if (currencyString.equals(keys.next())
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             private boolean takePair(JSONObject takenPairs, RandomAccessFile pairsFile, String currencyString, String paymentCurrencyString)
             {
-                takenPairs.put(paymentCurrencyString + "_" + currencyString, getName());
                 try 
                 {
                     pairsFile.setLength(0);
                     pairsFile.write(takenPairs.toString().getBytes());
-                    //pairsFile.close();
                     return true;
                 }
                 catch (IOException e)
                 {
                     return false;
                 }
+            }
+
+            private void releasePair()
+            {
+                // TODO
             }
 
             private JSONObject readTakenPairs(RandomAccessFile pairsFile)
