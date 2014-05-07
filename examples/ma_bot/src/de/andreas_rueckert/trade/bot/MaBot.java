@@ -495,14 +495,14 @@ public class MaBot implements TradeBot {
 
             private boolean isPairStillHot(String currencyString, String paymentCurrencyString, int maxPairs)
             {
-`               String requestResult = HttpUtils.httpGet(proxy + "/hot_" + paymentCurrencyString + ".html");
+                String requestResult = HttpUtils.httpGet(proxy + "/hot_" + paymentCurrencyString + ".html");
                 JSONArray pairs = JSONArray.fromObject(requestResult);
                 for (int i = 0; i < maxPairs; i++)
                 {
                     JSONObject hotPair = pairs.getJSONObject(i);
                     Iterator<String> keys = hotPair.keys();
                     keys.next();
-                    if (currencyString.equals(keys.next())
+                    if (currencyString.equals(keys.next()))
                     {
                         return true;
                     }
@@ -637,6 +637,7 @@ public class MaBot implements TradeBot {
                 doTrade();
                 reportCycleSummary();
                 lastRelMacd = relMacd;
+
             }
 
             private void checkPendingOrder()
@@ -725,11 +726,20 @@ public class MaBot implements TradeBot {
             private void doTrade()
             {
                 order = null;
-                if (isTimeToBuy()) 
+                String currencyString = _tradedCurrencyPair.getCurrency().getName();
+                String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
+                int maxPairs = paymentCurrencyString.equals("BTC") ? MAX_HOT_BTC_PAIRS : MAX_HOT_LTC_PAIRS;
+                if (!isPairStillHot(currencyString, paymentCurrencyString, maxPairs))
+                {
+ 	                logger.info("*** This currency pair is no longer hot! ***");
+                    order = sellCurrency(depth); 
+                    setState(MaBot.State.TARGETING);
+                }
+                else if (isTimeToBuy()) 
                 {
  			        order = buyCurrency(depth);
                 }
-                else if (isStopLoss() || isMinProfit()) 
+                else if (/*isStopLoss() ||*/ isMinProfit())
                 {
 	                order = sellCurrency(depth); 
                 }
