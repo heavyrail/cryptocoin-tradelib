@@ -341,6 +341,8 @@ public class MaBot implements TradeBot {
             BigDecimal sellFactor;
             BigDecimal takeProfitFactor;
             String pendingOrderId;
+            JSONObject takenPairs;
+            RandomAccessFile pairsFile;
 
             /**
             * The main bot thread.
@@ -350,52 +352,7 @@ public class MaBot implements TradeBot {
                 while( _updateThread == this) 
                 { 
                     long t1 = System.currentTimeMillis();
-                    try
-                    {
-                        switch (state)
-                        {
-                            case TARGETING:
-                                if (initTrade())
-                                {
-                                    setState(MaBot.State.HUNGRY);
-                                }
-                                break;
-                            case HUNGRY:
-                                setState(MaBot.State.TRADING);
-                                break;
-                            case TRADING:
-                                tradeCurrencies();
-                                break;
-                            case DUMPING:
-                                setState(MaBot.State.TARGETING);
-                                break;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        logger.error(e);
-                    }
-                    finally
-                    {
-                        if (state == MaBot.State.TRADING)
-                        {
-                            cycleNum++;
-                            sleepUntilNextCycle(t1);
-                        }
-                    } 
-		        }
-		    }
-
-            private boolean chooseCurrency()
-            {
-                if (!proxyEnabled)
-                {
-                    logger.error("at the moment I can't work without proxy");
-                    System.exit(-1);
-                }
-                else
-                {
-                    RandomAccessFile pairsFile = null;
+                    pairsFile = null;
                     FileLock fileLock = null;
                     try
                     {
@@ -405,25 +362,33 @@ public class MaBot implements TradeBot {
                         if (fileLock != null)
                         {
                             logger.info("choose currency lock acquired");
-                            String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
-                            JSONObject signals = JSONObject.fromObject(requestResult);
-                            _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS, pairsFile);
-                            if (_tradedCurrencyPair == null)
+                            switch (state)
                             {
-                                _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS, pairsFile);
+                                case TARGETING:
+                                    if (initTrade())
+                                    {
+                                        setState(MaBot.State.HUNGRY);
+                                    }
+                                    break;
+                                case HUNGRY:
+                                    setState(MaBot.State.TRADING);
+                                    break;
+                                case TRADING:
+                                    tradeCurrencies();
+                                    break;
+                                case DUMPING:
+                                    dumpCurrency();
+                                    break;
                             }
-                            if (_tradedCurrencyPair != null)
-                            {
-                                payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
-                                currency = _tradedCurrencyPair.getCurrency();
-                                return true;
-                            }
-                            logger.info("no pair selected");
+                        }
+                        else
+                        {
+                            logger.error("cannot acquire currency lock");
                         }
                     }
-                    catch (IOException e)
+                    catch (Exception e)
                     {
-                        logger.error("cannot acquire currency lock");
+                        logger.error(e);
                     }
                     finally
                     {
@@ -439,7 +404,49 @@ public class MaBot implements TradeBot {
                                 logger.error("cannot release currency lock");
                             }
                         }
-                    }             
+                        if (state == MaBot.State.TRADING)
+                        {
+                            cycleNum++;
+                            sleepUntilNextCycle(t1);
+                        }
+                    } 
+		        }
+		    }
+
+            private void dumpCurrency()
+            {
+ 	            logger.info("*** This currency pair is no longer hot! ***");
+                String currencyString = _tradedCurrencyPair.getCurrency().getName();
+                String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
+                takenPairs.remove(currencyString + "_" + paymentCurrencyString);
+                updatePairsFile(takenPairs, pairsFile);
+                order = sellCurrency(depth); 
+                setState(MaBot.State.TARGETING);
+            }
+
+            private boolean chooseCurrency()
+            {
+                if (!proxyEnabled)
+                {
+                    logger.error("at the moment I can't work without proxy");
+                    System.exit(-1);
+                }
+                else
+                {
+                    String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
+                    JSONObject signals = JSONObject.fromObject(requestResult);
+                    _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS, pairsFile);
+                    if (_tradedCurrencyPair == null)
+                    {
+                        _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS, pairsFile);
+                    }
+                    if (_tradedCurrencyPair != null)
+                    {
+                        payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
+                        currency = _tradedCurrencyPair.getCurrency();
+                        return true;
+                    }
+                    logger.info("no pair selected");
                 }
                 return false;
             }
@@ -458,7 +465,7 @@ public class MaBot implements TradeBot {
                     JSONArray hotSignals = signals.getJSONArray(paymentCurrencyString + "_" + currencyString);
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
                     logger.info(paymentCurrencyString + "_" + currencyString + " " + hotRelMacd);
-                    JSONObject takenPairs = readTakenPairs(pairsFile);
+                    takenPairs = readTakenPairs(pairsFile);
                     if (takenPairs != null)
                     {
                         boolean pairAvailable = !hasCurrencyPairTaken(takenPairs, currencyString, paymentCurrencyString);
@@ -473,7 +480,7 @@ public class MaBot implements TradeBot {
                         if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
                         {
                             takenPairs.put(paymentCurrencyString + "_" + currencyString, getName());
-                            if (takePair(takenPairs, pairsFile, currencyString, paymentCurrencyString))
+                            if (updatePairsFile(takenPairs, pairsFile))
                             {
                                 logger.info(currencyString + " " + hotRelMacd);
                                 result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
@@ -510,7 +517,7 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
-            private boolean takePair(JSONObject takenPairs, RandomAccessFile pairsFile, String currencyString, String paymentCurrencyString)
+            private boolean updatePairsFile(JSONObject takenPairs, RandomAccessFile pairsFile)
             {
                 try 
                 {
@@ -634,10 +641,11 @@ public class MaBot implements TradeBot {
             {
                 checkPendingOrder();
                 calculateSignals();
-                doTrade();
-                reportCycleSummary();
-                lastRelMacd = relMacd;
-
+                if (doTrade())
+                {
+                    reportCycleSummary();
+                    lastRelMacd = relMacd;
+                }
             }
 
             private void checkPendingOrder()
@@ -723,7 +731,7 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private void doTrade()
+            private boolean doTrade()
             {
                 order = null;
                 String currencyString = _tradedCurrencyPair.getCurrency().getName();
@@ -731,9 +739,8 @@ public class MaBot implements TradeBot {
                 int maxPairs = paymentCurrencyString.equals("BTC") ? MAX_HOT_BTC_PAIRS : MAX_HOT_LTC_PAIRS;
                 if (!isPairStillHot(currencyString, paymentCurrencyString, maxPairs))
                 {
- 	                logger.info("*** This currency pair is no longer hot! ***");
-                    order = sellCurrency(depth); 
-                    setState(MaBot.State.TARGETING);
+                    setState(MaBot.State.DUMPING);
+                    return false;
                 }
                 else if (isTimeToBuy()) 
                 {
@@ -747,6 +754,7 @@ public class MaBot implements TradeBot {
                 {
                     pendingOrderId = order.getId();                        
                 }                
+                return true;
             }
 
             private boolean isTrendUp()
