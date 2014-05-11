@@ -360,7 +360,6 @@ public class MaBot implements TradeBot {
                 while( _updateThread == this) 
                 { 
                     long t1 = System.currentTimeMillis();
-                    pairsFile = null;
                     FileLock fileLock = null;
                     try
                     {
