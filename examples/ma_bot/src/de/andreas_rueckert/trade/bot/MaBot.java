@@ -424,6 +424,7 @@ public class MaBot implements TradeBot {
                             try
                             {
                                 sleep(5000);
+                                t1 += 5000;
                             }
                             catch (InterruptedException e)
                             {
