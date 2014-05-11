@@ -410,6 +410,16 @@ public class MaBot implements TradeBot {
                                 logger.error("cannot release currency lock");
                             }
                         }
+                        else
+                        {
+                            try
+                            {
+                                sleep(500);
+                            }
+                            catch (InterruptedException e)
+                            {
+                            }
+                        }
                         if (state == MaBot.State.TRADING && fileLock != null)
                         {
                             cycleNum++;
