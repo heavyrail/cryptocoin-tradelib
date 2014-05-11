@@ -384,6 +384,7 @@ public class MaBot implements TradeBot {
                         else
                         {
                             logger.error("cannot acquire currency lock");
+                            continue;
                         }
                     }
                     catch (Exception e)
@@ -418,8 +419,20 @@ public class MaBot implements TradeBot {
  	            logger.info("*** This currency pair is no longer hot! ***");
                 String currencyString = _tradedCurrencyPair.getCurrency().getName();
                 String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
-                takenPairs.remove(currencyString + "_" + paymentCurrencyString);
-                updatePairsFile(takenPairs, pairsFile);
+                String botName = (String) takenPairs.remove(currencyString + "_" + paymentCurrencyString);
+                if (botName != null)
+                {
+                    logger.info("currency had been held by " + botName);
+                    logger.info("now we have " + takenPairs.toString());
+                }
+                if (updatePairsFile(takenPairs, pairsFile))
+                {
+                    logger.info("taken pairs file updated");
+                }
+                else
+                {
+                    logger.error("couldn't update taken pairs file");
+                }
                 order = sellCurrency(depth); 
                 setState(MaBot.State.TARGETING);
             }
@@ -529,11 +542,6 @@ public class MaBot implements TradeBot {
                 {
                     return false;
                 }
-            }
-
-            private void releasePair()
-            {
-                // TODO
             }
 
             private JSONObject readTakenPairs(RandomAccessFile pairsFile)
