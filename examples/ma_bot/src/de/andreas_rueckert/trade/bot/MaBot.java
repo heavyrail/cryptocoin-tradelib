@@ -257,8 +257,17 @@ public class MaBot implements TradeBot {
      */
     public String getName() 
     {
-        //return configFilename;
         return ManagementFactory.getRuntimeMXBean().getName();
+        /*String rawResult = ManagementFactory.getRuntimeMXBean().getName();
+        int atSignIndex = rawResult.indexOf('@');
+        if (atSignIndex != -1)
+        {
+            return rawResult.substring(0, atSignIndex);
+        }
+        else
+        {
+            return null;
+        }*/
     }
 
     /**
@@ -414,7 +423,7 @@ public class MaBot implements TradeBot {
                         {
                             try
                             {
-                                sleep(500);
+                                sleep(5000);
                             }
                             catch (InterruptedException e)
                             {
