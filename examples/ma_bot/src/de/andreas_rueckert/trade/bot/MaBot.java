@@ -395,11 +395,11 @@ public class MaBot implements TradeBot {
                                     break;
                             }
                         }
-                        else
+                        /*else
                         {
                             logger.error("cannot acquire currency lock");
                             continue;
-                        }
+                        }*/
                     }
                     catch (Exception e)
                     {
@@ -428,8 +428,8 @@ public class MaBot implements TradeBot {
                         {
                             try
                             {
-                                sleep(5000);
-                                t1 += 5000;
+                                sleep(500);
+                                t1 += 500;
                             }
                             catch (InterruptedException e)
                             {
