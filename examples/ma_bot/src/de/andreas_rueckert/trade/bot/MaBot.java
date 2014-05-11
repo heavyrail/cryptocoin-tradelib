@@ -39,9 +39,7 @@ import de.andreas_rueckert.trade.site.poloniex.client.PoloniexClient;
 import de.andreas_rueckert.trade.site.poloniex.client.PoloniexCurrencyPairImpl;
 import de.andreas_rueckert.util.*;
 
-import java.io.IOException;
-import java.io.File;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -349,6 +347,16 @@ public class MaBot implements TradeBot {
             */
             @Override public void run() 
             {
+                try
+                {
+                    pairsFile = new RandomAccessFile(TAKEN_PAIRS_FILE, "rw");
+                }
+                catch (FileNotFoundException e)
+                {
+                    logger.error(e);
+                    System.exit(-1);
+                }
+                FileChannel fileChannel = pairsFile.getChannel();
                 while( _updateThread == this) 
                 { 
                     long t1 = System.currentTimeMillis();
@@ -356,8 +364,6 @@ public class MaBot implements TradeBot {
                     FileLock fileLock = null;
                     try
                     {
-                        pairsFile = new RandomAccessFile(TAKEN_PAIRS_FILE, "rw");
-                        FileChannel fileChannel = pairsFile.getChannel();
                         fileLock = fileChannel.tryLock();
                         if (fileLock != null)
                         {
