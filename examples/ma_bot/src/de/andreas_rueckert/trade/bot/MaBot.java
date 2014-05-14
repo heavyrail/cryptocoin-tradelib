@@ -53,6 +53,7 @@ import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Scanner;
@@ -122,7 +123,9 @@ public class MaBot implements TradeBot {
     private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
 
     // Instance variables
-    
+   
+    String name;
+
     State state;
 
     Logger logger;
@@ -214,6 +217,24 @@ public class MaBot implements TradeBot {
         provider = ChartProvider.getInstance();
         logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
+        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        try
+        {
+            Process p = Runtime.getRuntime().exec("jps -m");
+            p.waitFor();
+            BufferedReader reader = 
+                    new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line = null;
+            while ((line = reader.readLine()) != null && !line.contains(configFilename)) {System.out.println(line);};
+            if (line != null)
+            {
+                System.out.println(line.split(" ")[0]);
+                name = line.split(" ")[0];
+            }
+        }
+        catch (Exception e)
+        {
+        }
         setState(State.TARGETING);
     }
 
@@ -257,24 +278,12 @@ public class MaBot implements TradeBot {
      */
     public String getName() 
     {
-        String shellCommand = "jps -m | grep " + configFilename + " | tr -b1-5";
-        String result = null;           
-        try
-        {
-            Process p = Runtime.getRuntime().exec(shellCommand);
-            p.waitFor();
-            BufferedReader reader = 
-                    new BufferedReader(new InputStreamReader(p.getInputStream()));
-            do
-            {
-                result = reader.readLine();
-            }
-            while (result == null);
-        }
-        catch (Exception e)
-        {
-        }
-        return result;
+        return name;
+    }
+
+    public String getPid()
+    {
+        return name;
     }
 
     /**
@@ -355,7 +364,7 @@ public class MaBot implements TradeBot {
             BigDecimal sellFactor;
             BigDecimal takeProfitFactor;
             String pendingOrderId;
-            JSONObject takenPairs;
+            HashMap<String, String> takenPairs;
             RandomAccessFile pairsFile;
 
             /**
@@ -457,7 +466,7 @@ public class MaBot implements TradeBot {
                     logger.info("currency had been held by " + botName);
                     logger.info("now we have " + takenPairs.toString());
                 }
-                if (updatePairsFile(takenPairs, pairsFile))
+                if (writePairsFile())
                 {
                     logger.info("taken pairs file updated");
                 }
@@ -480,10 +489,10 @@ public class MaBot implements TradeBot {
                 {
                     String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
                     JSONObject signals = JSONObject.fromObject(requestResult);
-                    _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS, pairsFile);
+                    _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS);
                     if (_tradedCurrencyPair == null)
                     {
-                        _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS, pairsFile);
+                        _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS);
                     }
                     if (_tradedCurrencyPair != null)
                     {
@@ -496,7 +505,7 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
-            private CurrencyPair chooseRisingCurrency(JSONObject signals, String paymentCurrencyString, int maxPairs, RandomAccessFile pairsFile)
+            private CurrencyPair chooseRisingCurrency(JSONObject signals, String paymentCurrencyString, int maxPairs)
             {
                 CurrencyPair result = null;
                 String requestResult = HttpUtils.httpGet(proxy + "/hot_" + paymentCurrencyString + ".html");
@@ -510,7 +519,7 @@ public class MaBot implements TradeBot {
                     JSONArray hotSignals = signals.getJSONArray(paymentCurrencyString + "_" + currencyString);
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
                     logger.info(paymentCurrencyString + "_" + currencyString + " " + hotRelMacd);
-                    takenPairs = readTakenPairs(pairsFile);
+                    takenPairs = readTakenPairs(); // TODO LTC and BTC conflict
                     if (takenPairs != null)
                     {
                         boolean pairAvailable = !hasCurrencyPairTaken(takenPairs, currencyString, paymentCurrencyString);
@@ -524,8 +533,8 @@ public class MaBot implements TradeBot {
                         }
                         if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
                         {
-                            takenPairs.put(paymentCurrencyString + "_" + currencyString, getName());
-                            if (updatePairsFile(takenPairs, pairsFile))
+                            //takenPairs.put(paymentCurrencyString + "_" + currencyString, getPid());
+                            if (writePairsFile())
                             {
                                 logger.info(currencyString + " " + hotRelMacd);
                                 result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
@@ -562,12 +571,15 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
-            private boolean updatePairsFile(JSONObject takenPairs, RandomAccessFile pairsFile)
+            private boolean writePairsFile()
             {
                 try 
                 {
                     pairsFile.setLength(0);
-                    pairsFile.write(takenPairs.toString().getBytes());
+                    pairsFile.write(_tradedCurrencyPair.getPaymentCurrency().toString().getBytes());
+                    pairsFile.write('_');
+                    pairsFile.write(_tradedCurrencyPair.getCurrency().toString().getBytes());
+                    pairsFile.write('\n');
                     return true;
                 }
                 catch (IOException e)
@@ -576,7 +588,7 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private JSONObject readTakenPairs(RandomAccessFile pairsFile)
+            private JSONObject readTakenPairs()
             {
                 try
                 {
@@ -599,7 +611,7 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private boolean hasCurrencyPairTaken(JSONObject takenPairs, String currencyString, String paymentCurrencyString)
+            private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString)
             {
                 String pair = paymentCurrencyString + "_" + currencyString;
                 return takenPairs.has(pair);
