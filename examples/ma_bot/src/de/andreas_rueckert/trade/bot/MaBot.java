@@ -253,21 +253,28 @@ public class MaBot implements TradeBot {
     /**
      * Get the name of this bot.
      *
-     * @return The name of this bot.
+     * @return The name of this bot - now it's essentially it's PID.
      */
     public String getName() 
     {
-        return ManagementFactory.getRuntimeMXBean().getName();
-        /*String rawResult = ManagementFactory.getRuntimeMXBean().getName();
-        int atSignIndex = rawResult.indexOf('@');
-        if (atSignIndex != -1)
+        String shellCommand = "jps -m | grep " + configFilename + " | tr -b1-5";
+        String result = null;           
+        try
         {
-            return rawResult.substring(0, atSignIndex);
+            Process p = Runtime.getRuntime().exec(shellCommand);
+            p.waitFor();
+            BufferedReader reader = 
+                    new BufferedReader(new InputStreamReader(p.getInputStream()));
+            do
+            {
+                result = reader.readLine();
+            }
+            while (result == null);
         }
-        else
+        catch (Exception e)
         {
-            return null;
-        }*/
+        }
+        return result;
     }
 
     /**
