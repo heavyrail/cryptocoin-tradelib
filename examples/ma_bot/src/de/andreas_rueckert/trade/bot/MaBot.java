@@ -63,6 +63,7 @@ import net.sf.json.JSONObject;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.commons.io.FileUtils;
 
 /**
  * This is a simple bot to demonstrate the usage of the cryptocoin tradelib.
@@ -119,6 +120,8 @@ public class MaBot implements TradeBot {
 
     private final int MAX_HOT_BTC_PAIRS = 5;
     private final int MAX_HOT_LTC_PAIRS = 3;
+
+
 
     private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
 
@@ -217,7 +220,6 @@ public class MaBot implements TradeBot {
         provider = ChartProvider.getInstance();
         logger = LogUtils.getInstance().getLogger();
         logger.setLevel(Level.INFO);
-        System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         try
         {
             Process p = Runtime.getRuntime().exec("jps -m");
@@ -225,7 +227,7 @@ public class MaBot implements TradeBot {
             BufferedReader reader = 
                     new BufferedReader(new InputStreamReader(p.getInputStream()));
             String line = null;
-            while ((line = reader.readLine()) != null && !line.contains(configFilename)) {System.out.println(line);};
+            while ((line = reader.readLine()) != null && !line.contains(configFilename));
             if (line != null)
             {
                 System.out.println(line.split(" ")[0]);
@@ -522,7 +524,7 @@ public class MaBot implements TradeBot {
                     takenPairs = readTakenPairs(); // TODO LTC and BTC conflict
                     if (takenPairs != null)
                     {
-                        boolean pairAvailable = !hasCurrencyPairTaken(takenPairs, currencyString, paymentCurrencyString);
+                        boolean pairAvailable = !hasCurrencyPairTaken(currencyString, paymentCurrencyString);
                         if (pairAvailable)
                         {
                             logger.info("pair is available, let's take it");
@@ -571,6 +573,42 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
+            private void cleanupPidFiles()
+            {
+                ArrayList<String> pids = new ArrayList<String>();
+                try
+                {
+                    Process p = Runtime.getRuntime().exec("jps -m");
+                    p.waitFor();
+                    BufferedReader reader =
+                            new BufferedReader(new InputStreamReader(p.getInputStream()));
+                    String line = null;
+                    while ((line = reader.readLine()) != null)
+                    {
+                        pids.add(line.split(" ")[0]);
+                    }
+                    Collection files = FileUtils.listFiles(new File("."), {"pid"}, false);
+                    for (Iterator iterator = files.iterator(); iterator.hasNext(); )
+                    {
+                        File file = (File) iterator.next();
+                        String pid = file.getName().split(".")[0];
+                        if (pids.contains(pid))
+                        {
+                            // TODO read pair from file
+                            
+                        }
+                        else
+                        {
+                            // TODO deleteOrphanFile
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.error(e);
+                }
+            }
+
             private boolean writePairsFile()
             {
                 try 
@@ -588,9 +626,9 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            private JSONObject readTakenPairs()
+            private HashMap readTakenPairs()
             {
-                try
+                /*try
                 {
                     long len = pairsFile.length();
                     if (len > 0)
@@ -608,13 +646,13 @@ public class MaBot implements TradeBot {
                 catch (IOException e)
                 {
                     return null;
-                }
+                }*/
             }
 
             private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString)
             {
                 String pair = paymentCurrencyString + "_" + currencyString;
-                return takenPairs.has(pair);
+                return takenPairs.containsKey(pair);
             }
 
             private void calculateCoeffs()
