@@ -121,7 +121,7 @@ public class MaBot implements TradeBot {
     private final int MAX_HOT_BTC_PAIRS = 5;
     private final int MAX_HOT_LTC_PAIRS = 3;
 
-
+    private final static String PID_FILE_EXT = "pid";
 
     private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
 
@@ -367,14 +367,14 @@ public class MaBot implements TradeBot {
             BigDecimal takeProfitFactor;
             String pendingOrderId;
             HashMap<String, String> takenPairs;
-            RandomAccessFile pairsFile;
+            //RandomAccessFile pairsFile;
 
             /**
             * The main bot thread.
             */
             @Override public void run() 
             {
-                try
+                /*try
                 {
                     pairsFile = new RandomAccessFile(TAKEN_PAIRS_FILE, "rw");
                 }
@@ -383,41 +383,31 @@ public class MaBot implements TradeBot {
                     logger.error(e);
                     System.exit(-1);
                 }
-                FileChannel fileChannel = pairsFile.getChannel();
-                while( _updateThread == this) 
+                FileChannel fileChannel = pairsFile.getChannel();*/
+                while(_updateThread == this) 
                 { 
                     long t1 = System.currentTimeMillis();
-                    FileLock fileLock = null;
+                    //FileLock fileLock = null;
                     try
                     {
-                        fileLock = fileChannel.tryLock();
-                        if (fileLock != null)
+                        switch (state)
                         {
-                            logger.info("choose currency lock acquired");
-                            switch (state)
-                            {
-                                case TARGETING:
-                                    if (initTrade())
-                                    {
-                                        setState(MaBot.State.HUNGRY);
-                                    }
-                                    break;
-                                case HUNGRY:
-                                    setState(MaBot.State.TRADING);
-                                    break;
-                                case TRADING:
-                                    tradeCurrencies();
-                                    break;
-                                case DUMPING:
-                                    dumpCurrency();
-                                    break;
-                            }
+                            case TARGETING:
+                                if (initTrade())
+                                {
+                                    setState(MaBot.State.HUNGRY);
+                                }
+                                break;
+                            case HUNGRY:
+                                setState(MaBot.State.TRADING);
+                                break;
+                            case TRADING:
+                                tradeCurrencies();
+                                break;
+                            case DUMPING:
+                                dumpCurrency();
+                                break;
                         }
-                        /*else
-                        {
-                            logger.error("cannot acquire currency lock");
-                            continue;
-                        }*/
                     }
                     catch (Exception e)
                     {
@@ -425,33 +415,10 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
-                        if (fileLock != null)
+                        if (state == MaBot.State.TRADING)
                         {
-                            try
-                            {
-                                fileLock.release();
-                                logger.info("choose currency lock released");
-                            }
-                            catch (IOException e)
-                            {
-                                logger.error("cannot release currency lock");
-                            }
-                            if (state == MaBot.State.TRADING)
-                            {
-                                cycleNum++;
-                                sleepUntilNextCycle(t1);
-                            }
-                        }
-                        if (fileLock == null || state == MaBot.State.TARGETING)
-                        {
-                            try
-                            {
-                                sleep(500);
-                                t1 += 500;
-                            }
-                            catch (InterruptedException e)
-                            {
-                            }
+                            cycleNum++;
+                            sleepUntilNextCycle(t1);
                         }
                     } 
 		        }
@@ -468,7 +435,7 @@ public class MaBot implements TradeBot {
                     logger.info("currency had been held by " + botName);
                     logger.info("now we have " + takenPairs.toString());
                 }
-                if (writePairsFile())
+                if (writePairFile())
                 {
                     logger.info("taken pairs file updated");
                 }
@@ -522,35 +489,27 @@ public class MaBot implements TradeBot {
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
                     logger.info(paymentCurrencyString + "_" + currencyString + " " + hotRelMacd);
                     takenPairs = readTakenPairs(); // TODO LTC and BTC conflict
-                    if (takenPairs != null)
+                    boolean pairAvailable = !hasCurrencyPairTaken(currencyString, paymentCurrencyString);
+                    if (pairAvailable)
                     {
-                        boolean pairAvailable = !hasCurrencyPairTaken(currencyString, paymentCurrencyString);
-                        if (pairAvailable)
-                        {
-                            logger.info("pair is available, let's take it");
-                        }
-                        else
-                        {
-                            logger.info("pair is already taken, skip it");
-                        }
-                        if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
-                        {
-                            //takenPairs.put(paymentCurrencyString + "_" + currencyString, getPid());
-                            if (writePairsFile())
-                            {
-                                logger.info(currencyString + " " + hotRelMacd);
-                                result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
-                            }
-                            else
-                            {
-                                logger.error("cannot write taken pair to file");
-                            }
-                            break;
-                        }
+                        logger.info("pair is available, let's take it");
                     }
                     else
                     {
-                        logger.error("cannot parse taken pairs file");
+                        logger.info("pair is already taken, skip it");
+                    }
+                    if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
+                    {
+                        if (writePairFile())
+                        {
+                            logger.info(currencyString + " " + hotRelMacd);
+                            result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
+                        }
+                        else
+                        {
+                            logger.error("cannot write taken pair to file");
+                        }
+                        break;
                     }
                 }
                 return result;
@@ -573,8 +532,9 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
-            private void cleanupPidFiles()
+            private HashMap<String, String> readTakenPairs()
             {
+                HashMap<String, String> result = new HashMap<String, String>();
                 ArrayList<String> pids = new ArrayList<String>();
                 try
                 {
@@ -587,19 +547,26 @@ public class MaBot implements TradeBot {
                     {
                         pids.add(line.split(" ")[0]);
                     }
-                    Collection files = FileUtils.listFiles(new File("."), {"pid"}, false);
+                    String ext[] = {PID_FILE_EXT};
+                    Collection files = FileUtils.listFiles(new File("."), ext, false);
                     for (Iterator iterator = files.iterator(); iterator.hasNext(); )
                     {
                         File file = (File) iterator.next();
                         String pid = file.getName().split(".")[0];
                         if (pids.contains(pid))
                         {
-                            // TODO read pair from file
-                            
+                            reader = new BufferedReader(new FileReader(file));
+                            logger.info("reading pair from " + file.getName());
+                            line = reader.readLine();
+                            if (line != null)
+                            {
+                                takenPairs.put(line, pid);    
+                            }
                         }
                         else
                         {
-                            // TODO deleteOrphanFile
+                            logger.info("removing " + file.getName());
+                            file.delete();    
                         }
                     }
                 }
@@ -607,9 +574,29 @@ public class MaBot implements TradeBot {
                 {
                     logger.error(e);
                 }
+                return result;
             }
 
-            private boolean writePairsFile()
+            private boolean writePairFile()
+            {
+                try 
+                {
+                    PrintWriter writer = new PrintWriter(new FileWriter(new File(name + "." + PID_FILE_EXT)));
+                    writer.print(_tradedCurrencyPair.getPaymentCurrency().toString().getBytes());
+                    writer.print('_');
+                    writer.print(_tradedCurrencyPair.getCurrency().toString().getBytes());
+                    writer.println();
+                    writer.flush();
+                    writer.close();
+                    return true;
+                }
+                catch (IOException e)
+                {
+                    return false;
+                }
+            }
+
+            /*private boolean writePairsFile()
             {
                 try 
                 {
@@ -624,30 +611,7 @@ public class MaBot implements TradeBot {
                 {
                     return false;
                 }
-            }
-
-            private HashMap readTakenPairs()
-            {
-                /*try
-                {
-                    long len = pairsFile.length();
-                    if (len > 0)
-                    {
-                        byte buf[] = new byte[(int) len];
-                        pairsFile.seek(0);
-                        pairsFile.readFully(buf);
-                        return JSONObject.fromObject(new String(buf));
-                    }
-                    else
-                    {
-                        return new JSONObject();
-                    }
-                }
-                catch (IOException e)
-                {
-                    return null;
-                }*/
-            }
+            }*/
 
             private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString)
             {
