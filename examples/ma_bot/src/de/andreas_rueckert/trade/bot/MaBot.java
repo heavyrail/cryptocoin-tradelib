@@ -429,21 +429,22 @@ public class MaBot implements TradeBot {
  	            logger.info("*** This currency pair is no longer hot! ***");
                 String currencyString = _tradedCurrencyPair.getCurrency().getName();
                 String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
-                String botName = (String) takenPairs.remove(currencyString + "_" + paymentCurrencyString);
-                if (botName != null)
+                //String botName = (String) takenPairs.remove(currencyString + "_" + paymentCurrencyString);
+                /*if (botName != null)
                 {
                     logger.info("currency had been held by " + botName);
                     logger.info("now we have " + takenPairs.toString());
                 }
-                if (writePairFile())
+                if (writePairFile(currencyString, paymentCurrencyString))
                 {
                     logger.info("taken pairs file updated");
                 }
                 else
                 {
                     logger.error("couldn't update taken pairs file");
-                }
-                order = sellCurrency(depth); 
+                }*/
+                order = sellCurrency(depth);
+                (new File(name + "." + PID_FILE_EXT)).delete();
                 setState(MaBot.State.TARGETING);
             }
 
@@ -500,7 +501,7 @@ public class MaBot implements TradeBot {
                     }
                     if (hotRelMacd.compareTo(REL_MACD_THRESHOLD) >= 0 && pairAvailable)
                     {
-                        if (writePairFile())
+                        if (writePairFile(currencyString, paymentCurrencyString))
                         {
                             logger.info(currencyString + " " + hotRelMacd);
                             result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
@@ -545,6 +546,7 @@ public class MaBot implements TradeBot {
                     String line = null;
                     while ((line = reader.readLine()) != null)
                     {
+                        logger.info(line);
                         pids.add(line.split(" ")[0]);
                     }
                     String ext[] = {PID_FILE_EXT};
@@ -552,7 +554,9 @@ public class MaBot implements TradeBot {
                     for (Iterator iterator = files.iterator(); iterator.hasNext(); )
                     {
                         File file = (File) iterator.next();
-                        String pid = file.getName().split(".")[0];
+                        String parts[] = file.getName().split(".");
+                        logger.info(parts.length);
+                        String pid = parts[0];
                         if (pids.contains(pid))
                         {
                             reader = new BufferedReader(new FileReader(file));
@@ -577,14 +581,14 @@ public class MaBot implements TradeBot {
                 return result;
             }
 
-            private boolean writePairFile()
+            private boolean writePairFile(String currencyString, String paymentCurrencyString)
             {
                 try 
                 {
                     PrintWriter writer = new PrintWriter(new FileWriter(new File(name + "." + PID_FILE_EXT)));
-                    writer.print(_tradedCurrencyPair.getPaymentCurrency().toString().getBytes());
+                    writer.print(currencyString);
                     writer.print('_');
-                    writer.print(_tradedCurrencyPair.getCurrency().toString().getBytes());
+                    writer.print(paymentCurrencyString);
                     writer.println();
                     writer.flush();
                     writer.close();
