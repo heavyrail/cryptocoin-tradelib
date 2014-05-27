@@ -459,6 +459,7 @@ public class MaBot implements TradeBot {
                 {
                     String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
                     JSONObject signals = JSONObject.fromObject(requestResult);
+                    takenPairs = readTakenPairs();
                     _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS);
                     if (_tradedCurrencyPair == null)
                     {
@@ -489,7 +490,6 @@ public class MaBot implements TradeBot {
                     JSONArray hotSignals = signals.getJSONArray(paymentCurrencyString + "_" + currencyString);
                     BigDecimal hotRelMacd = new BigDecimal(hotSignals.getString(2)); 
                     logger.info(paymentCurrencyString + "_" + currencyString + " " + hotRelMacd);
-                    takenPairs = readTakenPairs(); // TODO LTC and BTC conflict
                     boolean pairAvailable = !hasCurrencyPairTaken(currencyString, paymentCurrencyString);
                     if (pairAvailable)
                     {
@@ -503,7 +503,7 @@ public class MaBot implements TradeBot {
                     {
                         if (writePairFile(currencyString, paymentCurrencyString))
                         {
-                            logger.info(currencyString + " " + hotRelMacd);
+                            logger.info("we take " +  currencyString + " (" + hotRelMacd + ")");
                             result = PoloniexCurrencyPairImpl.findByString(currencyString + "<=>" + paymentCurrencyString);
                         }
                         else
@@ -511,6 +511,10 @@ public class MaBot implements TradeBot {
                             logger.error("cannot write taken pair to file");
                         }
                         break;
+                    }
+                    else
+                    {
+                        logger.info("however, this pair is not very hot, skip it");
                     }
                 }
                 return result;
@@ -554,17 +558,18 @@ public class MaBot implements TradeBot {
                     for (Iterator iterator = files.iterator(); iterator.hasNext(); )
                     {
                         File file = (File) iterator.next();
-                        String parts[] = file.getName().split(".");
-                        logger.info(parts.length);
+                        String parts[] = file.getName().split("\\.");
+                        logger.info(file.getName() + " " + parts.length);
                         String pid = parts[0];
                         if (pids.contains(pid))
                         {
-                            reader = new BufferedReader(new FileReader(file));
                             logger.info("reading pair from " + file.getName());
+                            reader = new BufferedReader(new FileReader(file));
                             line = reader.readLine();
                             if (line != null)
                             {
-                                takenPairs.put(line, pid);    
+                                logger.info("putting (" + line + ";" + pid + ")");
+                                result.put(line, pid);    
                             }
                         }
                         else
@@ -586,9 +591,9 @@ public class MaBot implements TradeBot {
                 try 
                 {
                     PrintWriter writer = new PrintWriter(new FileWriter(new File(name + "." + PID_FILE_EXT)));
-                    writer.print(currencyString);
-                    writer.print('_');
                     writer.print(paymentCurrencyString);
+                    writer.print('_');
+                    writer.print(currencyString);
                     writer.println();
                     writer.flush();
                     writer.close();
@@ -690,7 +695,6 @@ public class MaBot implements TradeBot {
                 catch (Exception e)
                 {
                     logger.error(e);
-                    System.exit(-1);
                 }
                 return false;
             }
