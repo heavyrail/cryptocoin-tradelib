@@ -135,6 +135,9 @@ public class HttpUtils {
 	  return null;
       }
 
+      connection.setConnectTimeout(2500);
+      connection.setReadTimeout(5000);
+
       connection.setRequestProperty( "User-Agent", agent );
       
       // Add the additional headerlines, if there were any given.
@@ -235,6 +238,9 @@ public class HttpUtils {
 
 	    return null;
 	}
+
+    connection.setConnectTimeout(2500);
+    connection.setReadTimeout(5000);
 
 	try {
 	    connection.setRequestMethod( "POST" );
