@@ -386,11 +386,11 @@ public class PoloniexSignalBot
     {
         AbstractCollection<String> result = new ArrayList<String>();
         JSONArray hotBtc = makeHotList("BTC");
-        JSONArray hotLtc = makeHotList("LTC");
+        JSONArray hotXmr = makeHotList("XMR");
         hotBtc = truncateJsonArray(hotBtc, 5);
-        hotLtc = truncateJsonArray(hotLtc, 3);
+        hotXmr = truncateJsonArray(hotXmr, 3);
         makeHotCollection(hotBtc, result);
-        makeHotCollection(hotLtc, result);
+        makeHotCollection(hotXmr, result);
         return result;
     }
 
