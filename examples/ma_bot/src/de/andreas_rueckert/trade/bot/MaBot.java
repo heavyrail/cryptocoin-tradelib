@@ -118,12 +118,14 @@ public class MaBot implements TradeBot {
     private final BigDecimal TWO = new BigDecimal("2");
     private final BigDecimal THOUSAND = new BigDecimal("1000");
 
-    private final int MAX_HOT_BTC_PAIRS = 5;
-    private final int MAX_HOT_LTC_PAIRS = 3;
+    //private final int MAX_HOT_BTC_PAIRS = 6;
+    //private final int MAX_HOT_LTC_PAIRS = 3;
 
-    private final static String PID_FILE_EXT = "pid";
+    private final static String REMAINDER_FILENAME = "rem";
+    private final static String REMAINDER_FILE_EXT = "txt";
+    //private final static String PID_FILE_EXT = "pid";
 
-    private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
+    //private final static String TAKEN_PAIRS_FILE = "taken_pairs.txt";
 
     // Instance variables
    
@@ -134,6 +136,18 @@ public class MaBot implements TradeBot {
     Logger logger;
 
     String configFilename;
+
+    int numBots;
+
+    int activeBots;
+
+    String baseCurrencyString;
+
+    BigDecimal paymentCurrencyLimit;
+
+    BigDecimal remainder;
+
+    //File remainderFile;
 
     /**
      * The user inface of this bot.
@@ -192,9 +206,11 @@ public class MaBot implements TradeBot {
     /**
      * Create a new bot instance.
      */
-    public MaBot(String configFilename) 
+    public MaBot(String configFilename, int numBots, String baseCurrencyString) 
     {
         this.configFilename = configFilename;
+        this.numBots = numBots;
+        this.baseCurrencyString = baseCurrencyString;
         StringBuilder configLine = new StringBuilder();
         try
         {
@@ -399,6 +415,7 @@ public class MaBot implements TradeBot {
                                 }
                                 break;
                             case HUNGRY:
+                                calculateCurrencyLimit();
                                 setState(MaBot.State.TRADING);
                                 break;
                             case TRADING:
@@ -415,7 +432,7 @@ public class MaBot implements TradeBot {
                     }
                     finally
                     {
-                        if (state == MaBot.State.TRADING)
+                        if (state == MaBot.State.TARGETING || state == MaBot.State.TRADING || state == MaBot.State.DUMPING)
                         {
                             cycleNum++;
                             sleepUntilNextCycle(t1);
@@ -429,23 +446,49 @@ public class MaBot implements TradeBot {
  	            logger.info("*** This currency pair is no longer hot! ***");
                 String currencyString = _tradedCurrencyPair.getCurrency().getName();
                 String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
-                //String botName = (String) takenPairs.remove(currencyString + "_" + paymentCurrencyString);
-                /*if (botName != null)
-                {
-                    logger.info("currency had been held by " + botName);
-                    logger.info("now we have " + takenPairs.toString());
-                }
-                if (writePairFile(currencyString, paymentCurrencyString))
-                {
-                    logger.info("taken pairs file updated");
-                }
-                else
-                {
-                    logger.error("couldn't update taken pairs file");
-                }*/
+                depth = provider.getDepth(_tradeSite, _tradedCurrencyPair);
                 order = sellCurrency(depth);
-                (new File(name + "." + PID_FILE_EXT)).delete();
-                setState(MaBot.State.TARGETING);
+                if (order != null && order.getStatus() != OrderStatus.ERROR)
+                {
+                    pendingOrderId = order.getId();
+                }
+                if (pendingOrderId != null)
+                {
+                    Order pendingOrder = orderBook.getOrder(pendingOrderId);
+                    if (!orderBook.isCompleted(pendingOrderId))
+                    {
+                        logger.info("cancelling order on hold");
+                        if (orderBook.cancelOrder(pendingOrder))
+                        {
+                            pendingOrderId = null;
+                        }
+                    }
+                    else
+                    {
+                        pendingOrderId = null;
+                        lastDeal = pendingOrder;
+                        lastPrice = pendingOrder.getPrice();
+                        OrderStatus status = pendingOrder.getStatus();
+                        if (status == OrderStatus.FILLED)
+                        {
+                            BigDecimal earned = pendingOrder.getAmount().multiply(lastPrice).multiply(BigDecimal.ONE.subtract(fee));
+                            logger.info("earned: " + earned);
+                            remainder = remainder.add(earned);
+                            logger.info("new remainder is: " + remainder);
+                            writeRemainderFile(payCurrency);
+                            (new File(name + "." + baseCurrencyString)).delete();
+                            setState(MaBot.State.TARGETING);
+                        }
+                        if (status == OrderStatus.PARTIALLY_FILLED)
+                        {
+                            logger.info("cancelling partially filled order");                                                                                              
+                            if (orderBook.cancelOrder(pendingOrder))                                                                                              
+                            {                                                                                                                                     
+                                pendingOrderId = null;                                                                                                            
+                            }                   
+                        }
+                    }
+                }
             }
 
             private boolean chooseCurrency()
@@ -460,19 +503,24 @@ public class MaBot implements TradeBot {
                     String requestResult = HttpUtils.httpGet(proxy + "/macd.html");
                     JSONObject signals = JSONObject.fromObject(requestResult);
                     takenPairs = readTakenPairs();
-                    _tradedCurrencyPair = chooseRisingCurrency(signals, "BTC", MAX_HOT_BTC_PAIRS);
-                    if (_tradedCurrencyPair == null)
+                    _tradedCurrencyPair = chooseRisingCurrency(signals, baseCurrencyString, numBots/*MAX_HOT_BTC_PAIRS*/);
+                    /*if (_tradedCurrencyPair == null)
                     {
                         _tradedCurrencyPair = chooseRisingCurrency(signals, "LTC", MAX_HOT_LTC_PAIRS);
-                    }
+                    }*/
                     if (_tradedCurrencyPair != null)
                     {
                         payCurrency = _tradedCurrencyPair.getPaymentCurrency();                
                         currency = _tradedCurrencyPair.getCurrency();
+                        if (activeBots == 0)
+                        {
+                            remainder = getFunds(payCurrency); 
+                            writeRemainderFile(payCurrency);
+                        }
                         return true;
                     }
-                    logger.info("no pair selected");
                 }
+                logger.info("no pair selected");
                 return false;
             }
 
@@ -539,6 +587,7 @@ public class MaBot implements TradeBot {
 
             private HashMap<String, String> readTakenPairs()
             {
+                activeBots = 0;
                 HashMap<String, String> result = new HashMap<String, String>();
                 ArrayList<String> pids = new ArrayList<String>();
                 try
@@ -553,7 +602,7 @@ public class MaBot implements TradeBot {
                         logger.info(line);
                         pids.add(line.split(" ")[0]);
                     }
-                    String ext[] = {PID_FILE_EXT};
+                    String ext[] = {baseCurrencyString};
                     Collection files = FileUtils.listFiles(new File("."), ext, false);
                     for (Iterator iterator = files.iterator(); iterator.hasNext(); )
                     {
@@ -569,7 +618,8 @@ public class MaBot implements TradeBot {
                             if (line != null)
                             {
                                 logger.info("putting (" + line + ";" + pid + ")");
-                                result.put(line, pid);    
+                                result.put(line, pid);
+                                activeBots++;
                             }
                         }
                         else
@@ -590,7 +640,7 @@ public class MaBot implements TradeBot {
             {
                 try 
                 {
-                    PrintWriter writer = new PrintWriter(new FileWriter(new File(name + "." + PID_FILE_EXT)));
+                    PrintWriter writer = new PrintWriter(new FileWriter(new File(name + "." + baseCurrencyString)));
                     writer.print(paymentCurrencyString);
                     writer.print('_');
                     writer.print(currencyString);
@@ -605,22 +655,27 @@ public class MaBot implements TradeBot {
                 }
             }
 
-            /*private boolean writePairsFile()
+            private boolean writeRemainderFile(Currency c)
             {
                 try 
                 {
-                    pairsFile.setLength(0);
-                    pairsFile.write(_tradedCurrencyPair.getPaymentCurrency().toString().getBytes());
-                    pairsFile.write('_');
-                    pairsFile.write(_tradedCurrencyPair.getCurrency().toString().getBytes());
-                    pairsFile.write('\n');
+                    FileOutputStream fos = new FileOutputStream(REMAINDER_FILENAME + "_" + c.getName() + "." + REMAINDER_FILE_EXT);
+                    logger.info("acquiring write lock");
+                    FileLock lock = fos.getChannel().lock();
+                    logger.info("write lock acquired");
+                    PrintWriter writer = new PrintWriter(new OutputStreamWriter(fos));
+                    writer.println(remainder);
+                    writer.flush();
+                    logger.info("releasing write lock");
+                    writer.close(); // NOTE: following writer closure, output stream closes and its lock releases automatically
                     return true;
                 }
                 catch (IOException e)
                 {
+                    e.printStackTrace();
                     return false;
                 }
-            }*/
+            }
 
             private boolean hasCurrencyPairTaken(String currencyString, String paymentCurrencyString)
             {
@@ -699,6 +754,55 @@ public class MaBot implements TradeBot {
                 return false;
             }
 
+            private void calculateCurrencyLimit()
+            {
+                FileLock lock = null;
+                String line = null;
+                try
+                {
+                    FileInputStream fis = new FileInputStream(REMAINDER_FILENAME + "_" + baseCurrencyString + "." + REMAINDER_FILE_EXT);
+                    logger.info("acquiring read lock");
+                    lock = fis.getChannel().lock(0, Long.MAX_VALUE, true);
+                    logger.info("read lock acquired");
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
+                    line = reader.readLine();
+                }
+                catch (IOException e)
+                {
+                    e.printStackTrace();
+                    System.exit(-1);
+                }
+                finally
+                {
+                    logger.info("releasing read lock");
+                    try
+                    {
+                        lock.release();
+                        logger.info("read lock released");
+                    }
+                    catch (Exception e2)
+                    {
+                        logger.error("lock has not released");
+                    }
+                }
+                if (line != null)
+                {
+                    logger.info("old remainder is " + line);
+                    remainder = new BigDecimal(line);
+                    BigDecimal shares = new BigDecimal((double) (numBots - activeBots));
+                    paymentCurrencyLimit = remainder.divide(shares, MathContext.DECIMAL128);
+                    logger.info("limit is " + paymentCurrencyLimit);
+                    remainder = remainder.subtract(paymentCurrencyLimit);
+                    logger.info("new remainder is " + remainder);
+                    writeRemainderFile(payCurrency);
+                }
+                else
+                {
+                    logger.info("error reading remainder file");
+                    System.exit(-1);
+                }
+            }
+
             private void tradeCurrencies()
             {
                 checkPendingOrder();
@@ -735,12 +839,23 @@ public class MaBot implements TradeBot {
                             logger.info("adjusting stop loss and target buy prices");
                             stopLossPrice = lastPrice.multiply(STOP_LOSS_FACTOR);
                             targetBuyPrice = lastPrice.multiply(sellFactor);
+                            BigDecimal spent = pendingOrder.getAmount().multiply(lastPrice);
+                            paymentCurrencyLimit = paymentCurrencyLimit.subtract(spent);
+                            logger.info("spent: " + spent);
                         }
                         else
                         {
                             logger.info("stop loss and target buy prices remain intact");
-                            // TODO
+                            // TODO what?
                         }
+                        if (pendingOrder.getOrderType() == OrderType.SELL && (
+                                 status == OrderStatus.FILLED || status == OrderStatus.PARTIALLY_FILLED))
+                        {
+                            BigDecimal earned = pendingOrder.getAmount().multiply(lastPrice).multiply(BigDecimal.ONE.subtract(fee));
+                            logger.info("earned: " + earned);
+                            paymentCurrencyLimit = paymentCurrencyLimit.add(earned);
+                        }
+                        logger.info("limit remained: " + paymentCurrencyLimit);
                     }
                 }                        
             }
@@ -798,8 +913,9 @@ public class MaBot implements TradeBot {
                 order = null;
                 String currencyString = _tradedCurrencyPair.getCurrency().getName();
                 String paymentCurrencyString = _tradedCurrencyPair.getPaymentCurrency().getName();
-                int maxPairs = paymentCurrencyString.equals("BTC") ? MAX_HOT_BTC_PAIRS : MAX_HOT_LTC_PAIRS;
-                if (!isPairStillHot(currencyString, paymentCurrencyString, maxPairs))
+                //int maxPairs = paymentCurrencyString.equals("BTC") ? MAX_HOT_BTC_PAIRS : MAX_HOT_LTC_PAIRS;
+                //int maxPairs = MAX_HOT_BTC_PAIRS;
+                if (!isPairStillHot(currencyString, paymentCurrencyString, numBots/*maxPairs*/))
                 {
                     setState(MaBot.State.DUMPING);
                     return false;
@@ -889,9 +1005,10 @@ public class MaBot implements TradeBot {
                 {
 
                     // Now check, if we have any funds to buy something.
-                    BigDecimal funds = getFunds(payCurrency); 
+                    BigDecimal funds = getFunds(payCurrency);
+                    BigDecimal availableFunds = funds.compareTo(paymentCurrencyLimit) < 0 ? funds : paymentCurrencyLimit;
               
-			        Amount buyAmount = new Amount(funds.divide(sellPrice, MathContext.DECIMAL128));
+			        Amount buyAmount = new Amount(availableFunds.divide(sellPrice, MathContext.DECIMAL128));
 
 		            // Compute the actual amount to trade.
 				    Amount orderAmount = availableAmount.compareTo(buyAmount) < 0 ? availableAmount : buyAmount;

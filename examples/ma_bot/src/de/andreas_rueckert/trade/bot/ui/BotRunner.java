@@ -87,6 +87,11 @@ public class BotRunner implements ListSelectionListener {
      */
     private boolean _serverMode = false;
 
+    // total number of bots trading simultaneously
+    int numBots; 
+
+    // base currency
+    String baseCurrency;
 
     // Constructors
 
@@ -97,6 +102,10 @@ public class BotRunner implements ListSelectionListener {
      */
     private BotRunner(String [] args) 
     {
+        
+        // default values, may be overriden by setting commandline keys
+        numBots = 4;
+        baseCurrency = "BTC";
 
 	    // Parse the commandline.
 	    if (parseCommandLine(args))
@@ -111,7 +120,7 @@ public class BotRunner implements ListSelectionListener {
             {
                 for (Object botConfigFilename : _botsToStart.toArray())
                 {
-                    registerTradeBot(new MaBot((String) botConfigFilename));
+                    registerTradeBot(new MaBot((String) botConfigFilename, numBots, baseCurrency));
                 }
                 for (TradeBot bot : _registeredTradeBots.values())
                 {
@@ -231,42 +240,73 @@ public class BotRunner implements ListSelectionListener {
      *
      * @return true, if the commandline was successfully parsed. False in case of an error.
      */
-    private final boolean parseCommandLine( String [] args) {
-	
-	// Loop over the command line arguments.
-	for( int currentArgumentIndex = 0; currentArgumentIndex < args.length; ++currentArgumentIndex) {
+    private final boolean parseCommandLine(String [] args) 
+    {
+	    // Loop over the command line arguments.
+	    for (int currentArgumentIndex = 0; currentArgumentIndex < args.length; ++currentArgumentIndex)
+        {
+	        // Get the current argument.
+    	    String currentArgument = args[ currentArgumentIndex];
+	        if ("-server".equalsIgnoreCase(currentArgument)) 
+            {
+		        // Activate the server mode.
+		        _serverMode = true;
+    	    }
+            else if ("-numbots".equalsIgnoreCase(currentArgument))  
+            {  // The user announces total number of bots.
 
-	    // Get the current argument.
-	    String currentArgument = args[ currentArgumentIndex];
-
-	    if( "-server".equalsIgnoreCase( currentArgument)) {
-		
-		// Activate the server mode.
-		_serverMode = true;
-		
-
-	    } else if( "-startbot".equalsIgnoreCase( currentArgument)) {  // The user wants to start a bot.
-		
-                if( ++currentArgumentIndex >= args.length) {
-
-                    LogUtils.getInstance().getLogger().error( "-startbot switch given but no trade bot name to start.");
-
-		    return false;  // Indicate an error.
-
-                } else {
-
-		    // add the bot name to the list of bots to start.
-                    _botsToStart.add( args[ currentArgumentIndex]);
+                if (++currentArgumentIndex >= args.length) 
+                {
+                    LogUtils.getInstance().getLogger().error("-numbots switch given but no number followed.");
+                    return false;  // Indicate an error.
+                } 
+                else 
+                {
+                    try
+                    {
+                        numBots = Integer.parseInt(args[currentArgumentIndex]);
+                    }
+                    catch (NumberFormatException e)
+                    {
+                        LogUtils.getInstance().getLogger().error("-numbots switch given but non-numeric argument followed.");
+                        return false;  // Indicate an error.
+                    }
                 }
-	    } else {  // This is an unknown argument.
-
-		LogUtils.getInstance().getLogger().error( "BotRunner: unknown commandline argument: " + currentArgument);
-
-		return false;
+            } 
+            else if ("-base".equalsIgnoreCase(currentArgument)) 
+            {  // The user declares a base currency.
+		
+                if (++currentArgumentIndex >= args.length) 
+                {
+                    LogUtils.getInstance().getLogger().error("-base switch given but no currency name provided.");
+		            return false;  // Indicate an error.
+                }
+                else
+                {
+                    baseCurrency = args[currentArgumentIndex];
+                }
+	        }
+            else if ("-startbot".equalsIgnoreCase(currentArgument)) 
+            {  // The user wants to start a bot.
+		
+                if (++currentArgumentIndex >= args.length) 
+                {
+                    LogUtils.getInstance().getLogger().error("-startbot switch given but no trade bot name to start.");
+		            return false;  // Indicate an error.
+                }
+                else
+                {
+		            // add the bot name to the list of bots to start.
+                    _botsToStart.add(args[currentArgumentIndex]);
+                }
+	        }
+            else
+            {  // This is an unknown argument.
+		        LogUtils.getInstance().getLogger().error("BotRunner: unknown commandline argument: " + currentArgument);
+		        return false;
+	        }
 	    }
-	}
-
-	return true;  // Commandline successfully parsed.
+	    return true;  // Commandline successfully parsed.
     }
 
     /**

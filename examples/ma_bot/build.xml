@@ -101,14 +101,16 @@
         </sequential>
     </macrodef>
 
-    <target name="run" depends="dist">
+    <target name="run0" depends="dist">
         <set.timestamp/>
         <record name="mabot.0.${current.time}.log" action="start"/>
         <java jar="${bot.jarfile}" fork="true">
             <arg value="-server"/>
             <arg value="-startbot"/>
             <arg value="mabot.cfg"/>
-        </java>
+            <arg value="-numbots"/>
+            <arg value="5"/>
+       </java>
         <record name="mabot.0.${current.time}.log" action="stop"/>
     </target>
 
@@ -119,6 +121,8 @@
             <arg value="-server"/>
             <arg value="-startbot"/>
             <arg value="mabot1.cfg"/>
+            <arg value="-numbots"/>
+            <arg value="5"/>
         </java>
         <record name="mabot.1.${current.time}.log" action="stop"/>
     </target>
@@ -130,6 +134,8 @@
             <arg value="-server"/>
             <arg value="-startbot"/>
             <arg value="mabot2.cfg"/>
+            <arg value="-numbots"/>
+            <arg value="5"/>
         </java>
         <record name="mabot.2.${current.time}.log" action="stop"/>
     </target>
@@ -141,6 +147,8 @@
             <arg value="-server"/>
             <arg value="-startbot"/>
             <arg value="mabot3.cfg"/>
+            <arg value="-numbots"/>
+            <arg value="5"/>
         </java>
         <record name="mabot.3.${current.time}.log" action="stop"/>
     </target>
@@ -152,8 +160,55 @@
             <arg value="-server"/>
             <arg value="-startbot"/>
             <arg value="mabot4.cfg"/>
+            <arg value="-numbots"/>
+            <arg value="5"/>
         </java>
         <record name="mabot.4.${current.time}.log" action="stop"/>
+    </target>
+
+    <target name="run0X" depends="dist">
+        <set.timestamp/>
+        <record name="x_mabot.0.${current.time}.log" action="start"/>
+        <java jar="${bot.jarfile}" fork="true">
+            <arg value="-server"/>
+            <arg value="-startbot"/>
+            <arg value="mabot5.cfg"/>
+            <arg value="-base"/>
+            <arg value="XMR"/>
+            <arg value="-numbots"/>
+            <arg value="3"/>
+        </java>
+        <record name="x_mabot.0.${current.time}.log" action="stop"/>
+    </target>
+
+    <target name="run1X" depends="dist">
+        <set.timestamp/>
+        <record name="x_mabot.1.${current.time}.log" action="start"/>
+        <java jar="${bot.jarfile}" fork="true">
+            <arg value="-server"/>
+            <arg value="-startbot"/>
+            <arg value="mabot6.cfg"/>
+            <arg value="-base"/>
+            <arg value="XMR"/>
+            <arg value="-numbots"/>
+            <arg value="3"/>
+        </java>
+        <record name="x_mabot.1.${current.time}.log" action="stop"/>
+    </target>
+
+    <target name="run2X" depends="dist">
+        <set.timestamp/>
+        <record name="x_mabot.2.${current.time}.log" action="start"/>
+        <java jar="${bot.jarfile}" fork="true">
+            <arg value="-server"/>
+            <arg value="-startbot"/>
+            <arg value="mabot7.cfg"/>
+            <arg value="-base"/>
+            <arg value="XMR"/>
+            <arg value="-numbots"/>
+            <arg value="3"/>
+        </java>
+        <record name="x_mabot.2.${current.time}.log" action="stop"/>
     </target>
 
     <target name="clean" description="clean up" >
