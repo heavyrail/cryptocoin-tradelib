@@ -177,6 +177,7 @@ public class PoloniexSignalBot
             long now = timeUtils.getCurrentGMTTimeMicros();
             while (itPairs.hasNext())
             {
+                logger.info("*** 8 ***");          
                 String pair = (String) itPairs.next();
                 Price price = new Price(jsonResult.getJSONObject(pair).getString("last"));
                 CurrencyPairImpl currencyPair = makeCurrencyPair(pair);
@@ -202,6 +203,7 @@ public class PoloniexSignalBot
                     }
                 }
                 result++;
+                logger.info("*** 9 ***");          
             }
             try
             {
@@ -385,12 +387,19 @@ public class PoloniexSignalBot
     private static AbstractCollection<String> updateHotCollection()
     {
         AbstractCollection<String> result = new ArrayList<String>();
+        logger.info("*** 1 ***");
         JSONArray hotBtc = makeHotList("BTC");
+        logger.info("*** 2 ***");
         JSONArray hotXmr = makeHotList("XMR");
+        logger.info("*** 3 ***");
         hotBtc = truncateJsonArray(hotBtc, 5);
+        logger.info("*** 4 ***");
         hotXmr = truncateJsonArray(hotXmr, 3);
+        logger.info("*** 5 ***");
         makeHotCollection(hotBtc, result);
+        logger.info("*** 6 ***");
         makeHotCollection(hotXmr, result);
+        logger.info("*** 7 ***");
         return result;
     }
 
