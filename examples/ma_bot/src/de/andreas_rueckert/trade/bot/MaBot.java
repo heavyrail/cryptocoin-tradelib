@@ -188,6 +188,8 @@ public class MaBot implements TradeBot {
 
     private int cycleNum;
 
+    private int totalCycleNum;
+
     private int dumpingCycleNum;
 
     private ChartAnalyzer analyzer;
@@ -418,7 +420,6 @@ public class MaBot implements TradeBot {
                                 tradeCurrencies();
                                 break;
                             case DUMPING:
-                                dumpingCycleNum = 0;
                                 dumpCurrency();
                                 break;
                         }
@@ -433,6 +434,7 @@ public class MaBot implements TradeBot {
                         if (state == MaBot.State.TARGETING || state == MaBot.State.TRADING || state == MaBot.State.DUMPING)
                         {
                             cycleNum++;
+                            totalCycleNum++;
                             sleepUntilNextCycle(t1);
                         }
                     } 
@@ -441,7 +443,7 @@ public class MaBot implements TradeBot {
 
             private void dumpCurrency()
             {
-                //logger.info("*** This currency pair is no longer hot! ***");
+                logger.info("*** dumping attempt: " + dumpingCycleNum + " ***");
                 if (dumpingCycleNum < MAX_DUMPING_CYCLES)
                 {
                     boolean result = checkPendingDumpingOrder();
@@ -757,6 +759,7 @@ public class MaBot implements TradeBot {
             {
                 lastDeal = null;
                 lastRelMacd = null;
+                totalCycleNum = 1;
                 try 
                 {
                     logger.info("deleting old pair file " + name + "." + payCurrency/*payCurrencyString*/);
@@ -992,6 +995,7 @@ public class MaBot implements TradeBot {
                 if (!isPairStillHot(currencyString, paymentCurrencyString, numBots) && getHotCurrencyPair() != null)
                 {
                     // TODO finish all pending orders
+                    dumpingCycleNum = 0;
                     setState(MaBot.State.DUMPING);
                     return false;
                 }
@@ -1246,10 +1250,12 @@ public class MaBot implements TradeBot {
                     logger.info("last deal        |");
                 }
                 BigDecimal uptimeDays = new BigDecimal(cycleNum * UPDATE_INTERVAL / 86400.0);
+                BigDecimal totalUptimeDays = new BigDecimal(totalCycleNum * UPDATE_INTERVAL / 86400.0);
                 BigDecimal currencyValue = getFunds(currency);
                 BigDecimal payCurrencyValue = getFunds(payCurrency);
                 BigDecimal buyPriceLessFee = buyPrice.multiply(BigDecimal.ONE.subtract(fee));
-                BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
+                BigDecimal currencyValueInPayCurrency = buyPriceLessFee.multiply(currencyValue);
+                /*BigDecimal currentAssets = buyPriceLessFee.multiply(currencyValue).add(payCurrencyValue);
                 BigDecimal absProfit = currentAssets.subtract(initialAssets);
                 BigDecimal profit = BigDecimal.ZERO;
                 if (initialAssets.compareTo(BigDecimal.ZERO) != 0)
@@ -1269,14 +1275,15 @@ public class MaBot implements TradeBot {
                 }
                 double refProfitPercent = (refProfit.doubleValue() - 1) * 100;
                 double refProfitPerDay = Math.pow(refProfit.doubleValue(), BigDecimal.ONE.divide(uptimeDays, MathContext.DECIMAL128).doubleValue());
-                double refProfitPerMonth = Math.pow(refProfitPerDay, 30);
+                double refProfitPerMonth = Math.pow(refProfitPerDay, 30);*/
                 
                 DecimalFormat amountFormat = new DecimalFormat("########0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
                 DecimalFormat priceFormat = new DecimalFormat("###0.00000000", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
                 DecimalFormat macdFormat = new DecimalFormat("+###.########;-###.########", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
                 DecimalFormat relMacdFormat = new DecimalFormat("+###.###;-###.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));      
                 
-                logger.info(String.format("days uptime      |                   %12s                 |", uptimeDays.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("pair uptime      |                   %12s                 |", uptimeDays.setScale(3, RoundingMode.CEILING)));
+                logger.info(String.format("total uptime     |                   %12s                 |", totalUptimeDays.setScale(3, RoundingMode.CEILING)));
                 //logger.info(String.format("initial ( %5s) |             %18s                 |", payCurrency, amountFormat.format(initialAssets)));
                 //logger.info(String.format("current ( %5s) |             %18s                 |", payCurrency, amountFormat.format(currentAssets)));
                 //logger.info(String.format("profit  ( %5s) |             %18s                 |", payCurrency, amountFormat.format(absProfit)));
@@ -1286,6 +1293,9 @@ public class MaBot implements TradeBot {
 
                 logger.info(String.format("%5s            |               %16s                 |", currency, amountFormat.format(currencyValue)));
                 logger.info(String.format("%5s            |               %16s                 |", payCurrency, amountFormat.format(payCurrencyValue)));
+                logger.info(String.format("value            |               %16s                 |", amountFormat.format(currencyValueInPayCurrency)));
+                logger.info(String.format("remainder        |               %16s                 |", amountFormat.format(remainder)));
+                logger.info(String.format("limit            |               %16s                 |", amountFormat.format(paymentCurrencyLimit)));
                 if (targetBuyPrice != null)
                 {
                     logger.info(String.format("buy              |  %13s   %13s   %13s |",
